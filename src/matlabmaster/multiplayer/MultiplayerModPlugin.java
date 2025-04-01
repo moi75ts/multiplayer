@@ -82,7 +82,8 @@ public class MultiplayerModPlugin extends BaseModPlugin {
 
     @Override
     public void onGameLoad(boolean newGame) {
-        Global.getSector().addTransientScript(new EveryFrameMultiplayerScript());
+        Global.getSector().addTransientScript(new FastUpdateScript());
+        Global.getSector().addTransientScript(new SlowUpdateScript());
     }
 
     public static JSONObject getSettings() {

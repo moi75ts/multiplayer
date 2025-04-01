@@ -21,7 +21,7 @@ public class MultiplayerModPlugin extends BaseModPlugin {
     private static MessageHandler messageHandler; // Added for message receiving
     private Thread serverThread;
     public static String playerId = UUID.randomUUID().toString(); // Static playerId as in your version
-
+    public static String mode;
     @Override
     public void onApplicationLoad() throws Exception {
         super.onApplicationLoad();
@@ -34,7 +34,6 @@ public class MultiplayerModPlugin extends BaseModPlugin {
         // Initialize the message handler with the playerId
         messageHandler = new MessageHandler(playerId);
 
-        String mode;
         try {
             JSONObject gameSettings = settings.getJSONObject("gameSettings");
             mode = gameSettings.getString("mode");
@@ -108,5 +107,9 @@ public class MultiplayerModPlugin extends BaseModPlugin {
         if (client != null) {
             client.stop();
         }
+    }
+
+    public static String getMode(){
+        return mode;
     }
 }

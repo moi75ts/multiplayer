@@ -68,7 +68,7 @@ public class FastUpdateScript implements EveryFrameScript {
                 message.put("ships", ships);
 
                 sender.sendMessage(message.toString());
-                LOGGER.log(Level.INFO, "Sent position update for player " + playerId);
+                LOGGER.log(Level.DEBUG, "Sent position update for player " + playerId);
             } catch (JSONException e) {
                 LOGGER.log(Level.ERROR, "Failed to construct JSON message: " + e.getMessage());
             }
@@ -119,7 +119,7 @@ public class FastUpdateScript implements EveryFrameScript {
                         FleetMemberAPI member = Global.getFactory().createFleetMember(FleetMemberType.SHIP, variantId);
                         member.setShipName(shipName);
                         fleet.getFleetData().addFleetMember(member);
-                        LOGGER.log(Level.INFO, "Added " + shipName + " (" + variantId + ") to fleet");
+                        LOGGER.log(Level.DEBUG, "Added " + shipName + " (" + variantId + ") to fleet");
                     }
 
                     fleet.setAI(null);
@@ -127,13 +127,13 @@ public class FastUpdateScript implements EveryFrameScript {
                 }
                 fleet.setLocation(x, y);
                 fleet.setTransponderOn(transponder);
-                LOGGER.log(Level.INFO, "Updated fleet for player " + senderPlayerId + " at [" + x + ", " + y + "] in " + starSystem);
+                LOGGER.log(Level.DEBUG, "Updated fleet for player " + senderPlayerId + " at [" + x + ", " + y + "] in " + starSystem);
             } else {
                 CampaignFleetAPI fleet = (CampaignFleetAPI) sector.getEntityById(senderPlayerId);
                 if (fleet != null) {
                     fleet.despawn();
                 }
-                LOGGER.log(Level.INFO, "Fleet not updated for " + senderPlayerId + ": different system (" + starSystem + " vs " + currentSystemName + ")");
+                LOGGER.log(Level.DEBUG, "Fleet not updated for " + senderPlayerId + ": different system (" + starSystem + " vs " + currentSystemName + ")");
             }
         } catch (Exception e) {
             LOGGER.log(Level.ERROR, "Error handling fleet update: " + e.getMessage());

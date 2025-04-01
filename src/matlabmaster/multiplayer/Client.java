@@ -1,10 +1,21 @@
 package matlabmaster.multiplayer;
 
+import com.fs.starfarer.api.Global;
+import com.fs.starfarer.api.campaign.PlanetAPI;
+import com.fs.starfarer.api.campaign.SectorEntityToken;
+import com.fs.starfarer.api.campaign.StarSystemAPI;
+import com.fs.starfarer.api.fleet.FleetMemberViewAPI;
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.log4j.LogManager;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+import org.lwjgl.Sys;
 
 import java.io.*;
 import java.net.Socket;
+import java.util.List;
 
 public class Client implements MessageSender, MessageReceiver {
     private static final Logger LOGGER = LogManager.getLogger("multiplayer");
@@ -35,7 +46,7 @@ public class Client implements MessageSender, MessageReceiver {
             try {
                 String response;
                 while (isRunning && (response = in.readLine()) != null) {
-                    LOGGER.log(org.apache.log4j.Level.INFO, "Received from server: " + response);
+                    LOGGER.log(Level.DEBUG, "Received from server: " + response);
                     if (messageHandler != null) {
                         messageHandler.onMessageReceived(response); // Immediate callback
                     }
@@ -60,7 +71,7 @@ public class Client implements MessageSender, MessageReceiver {
             return;
         }
         out.println(message);
-        LOGGER.log(org.apache.log4j.Level.INFO, "Client sent: " + message);
+        LOGGER.log(org.apache.log4j.Level.DEBUG, "Client sent: " + message);
     }
 
     @Override
@@ -86,5 +97,23 @@ public class Client implements MessageSender, MessageReceiver {
         } catch (IOException e) {
             LOGGER.log(org.apache.log4j.Level.ERROR, "Error stopping client: " + e.getMessage());
         }
+    }
+
+    public static void requestOrbitingBodiesUpdate(String currentLocation) throws JSONException {
+        MessageSender sender = MultiplayerModPlugin.getMessageSender();
+        if (sender != null && sender.isActive()) {
+            try {
+                JSONObject message = new JSONObject();
+                message.put("command",6);
+                message.put("playerId", MultiplayerModPlugin.GetPlayerId());
+                message.put("system",currentLocation);
+                sender.sendMessage(message.toString());
+            }catch (JSONException e) {
+                LOGGER.log(Level.ERROR, "Failed to construct JSON message: " + e.getMessage());
+            }
+        }
+    }
+    public static void handleOrbitingBodiesUpdate(JSONObject data){
+        System.out.println(data);
     }
 }

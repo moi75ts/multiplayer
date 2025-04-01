@@ -19,13 +19,13 @@ public class MessageHandler implements MessageReceiver {
 
     @Override
     public void onMessageReceived(String message) {
-        LOGGER.log(Level.INFO, "Received message: " + message);
+        LOGGER.log(Level.DEBUG, "Received message: " + message);
         try {
             JSONObject data = new JSONObject(message);
             String senderPlayerId = data.getString("playerId");
             if (!Objects.equals(senderPlayerId, playerId)) { // Ignore own messages
                 messageQueue.add(message); // Queue for processing in EveryFrameScript
-                LOGGER.log(Level.INFO, "Message queued for processing");
+                LOGGER.log(Level.DEBUG, "Message queued for processing");
             }
         } catch (Exception e) {
             LOGGER.log(Level.ERROR, "Error queuing message '" + message + "': " + e.getMessage());

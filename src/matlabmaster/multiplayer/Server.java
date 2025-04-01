@@ -1,8 +1,15 @@
 package matlabmaster.multiplayer;
 
 import com.fs.starfarer.api.Global;
+import com.fs.starfarer.api.campaign.PlanetAPI;
+import com.fs.starfarer.api.campaign.SectorEntityToken;
+import com.fs.starfarer.api.campaign.StarSystemAPI;
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.log4j.LogManager;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.*;
 import java.net.ServerSocket;
@@ -64,7 +71,7 @@ public class Server implements MessageSender, MessageReceiver {
 
             String inputLine;
             while ((inputLine = in.readLine()) != null) {
-                LOGGER.log(org.apache.log4j.Level.INFO, "Received from client: " + inputLine);
+                LOGGER.log(org.apache.log4j.Level.DEBUG, "Received from client: " + inputLine);
                 if (messageHandler != null) {
                     messageHandler.onMessageReceived(inputLine); // Immediate callback
                 }
@@ -98,7 +105,7 @@ public class Server implements MessageSender, MessageReceiver {
                 writer.println(message);
             }
         }
-        LOGGER.log(org.apache.log4j.Level.INFO, "Server broadcasted: " + message);
+        LOGGER.log(Level.DEBUG, "Server broadcasted: " + message);
     }
 
     @Override
@@ -140,6 +147,31 @@ public class Server implements MessageSender, MessageReceiver {
                 resource.close();
             } catch (IOException e) {
                 // Ignore
+            }
+        }
+    }
+
+    public static void sendOrbitingBodiesUpdate(String systemName) throws JSONException {
+        //client method
+        MessageSender sender = MultiplayerModPlugin.getMessageSender();
+        if (sender != null && sender.isActive()) {
+            try{
+                JSONObject message = new JSONObject();
+                message.put("command", 6);
+                StarSystemAPI system = Global.getSector().getStarSystem(systemName);
+                JSONArray planets = new JSONArray();
+                for (SectorEntityToken entity : system.getAllEntities()) {
+                    if (entity instanceof PlanetAPI) {
+                        JSONObject planet = new JSONObject();
+                        planet.put("PId", entity.getId());
+                        planet.put("a", entity.getCircularOrbitAngle());
+                        planets.put(planet);
+                    }
+                }
+                message.put("planet",planets);
+                sender.sendMessage(message.toString());
+            } catch (JSONException e) {
+                LOGGER.log(Level.ERROR, "Failed to construct JSON message: " + e.getMessage());
             }
         }
     }

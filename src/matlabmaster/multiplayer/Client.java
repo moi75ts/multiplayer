@@ -114,6 +114,17 @@ public class Client implements MessageSender, MessageReceiver {
         }
     }
     public static void handleOrbitingBodiesUpdate(JSONObject data){
-        System.out.println(data);
+        try {
+            JSONArray planets = data.getJSONArray("planet");
+            for (int i = 0; i < planets.length(); i++) {
+                JSONObject planetData = planets.getJSONObject(i);
+                String planetId = planetData.getString("PId");
+                float angle = (float) planetData.getDouble("a");
+                PlanetAPI planet = (PlanetAPI) Global.getSector().getEntityById(planetId);
+                if (planet != null) planet.setCircularOrbitAngle(angle);
+            }
+        } catch (Exception e) {
+            LOGGER.log(Level.ERROR, "Error handling orbiting bodies update: " + e.getMessage());
+        }
     }
 }

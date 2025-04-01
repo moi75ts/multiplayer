@@ -158,6 +158,7 @@ public class Server implements MessageSender, MessageReceiver {
             try{
                 JSONObject message = new JSONObject();
                 message.put("command", 6);
+                message.put("playerId","server");
                 StarSystemAPI system = Global.getSector().getStarSystem(systemName);
                 JSONArray planets = new JSONArray();
                 for (SectorEntityToken entity : system.getAllEntities()) {

@@ -41,7 +41,6 @@ public class FastUpdateScript implements EveryFrameScript {
         if (timer >= INTERVAL) {
             timer -= INTERVAL; // Reset with remainder to avoid drift
             sendPositionUpdate();
-            processMessages();
         }
     }
 
@@ -72,71 +71,6 @@ public class FastUpdateScript implements EveryFrameScript {
             } catch (JSONException e) {
                 LOGGER.log(Level.ERROR, "Failed to construct JSON message: " + e.getMessage());
             }
-        }
-    }
-
-    private void processMessages() {
-        ConcurrentLinkedQueue<String> queue = MessageHandler.getMessageQueue();
-        String message;
-        while ((message = queue.poll()) != null) {
-            try {
-                JSONObject data = new JSONObject(message);
-                int command = data.getInt("command");
-                if (command == 5) { // Location data (fast updates)
-                    handleFleetUpdate(data);
-                }
-                // Other commands handled in SlowUpdateScript
-            } catch (Exception e) {
-                LOGGER.log(Level.ERROR, "Error processing fast update message '" + message + "': " + e.getMessage());
-            }
-        }
-    }
-
-    private void handleFleetUpdate(JSONObject data) {
-        try {
-            String senderPlayerId = data.getString("playerId");
-            float x = (float) data.getDouble("x");
-            float y = (float) data.getDouble("y");
-            String starSystem = data.getString("starSystem");
-            boolean transponder = data.getBoolean("transponder");
-            JSONArray ships = data.getJSONArray("ships");
-
-            SectorAPI sector = Global.getSector();
-            LocationAPI currentLocation = sector.getCurrentLocation();
-            String currentSystemName = currentLocation != null ? currentLocation.getName() : "";
-
-            if (Objects.equals(starSystem, currentSystemName)) {
-                CampaignFleetAPI fleet = (CampaignFleetAPI) sector.getEntityById(senderPlayerId);
-                if (fleet == null) {
-                    fleet = Global.getFactory().createEmptyFleet("neutral", "Fleet of " + senderPlayerId, true);
-                    fleet.setId(senderPlayerId);
-
-                    for (int i = 0; i < ships.length(); i++) {
-                        JSONArray ship = ships.getJSONArray(i);
-                        String shipName = ship.getString(0).isEmpty() ? "Unnamed Ship" : ship.getString(0);
-                        String variantId = ship.getString(1);
-
-                        FleetMemberAPI member = Global.getFactory().createFleetMember(FleetMemberType.SHIP, variantId);
-                        member.setShipName(shipName);
-                        fleet.getFleetData().addFleetMember(member);
-                        LOGGER.log(Level.DEBUG, "Added " + shipName + " (" + variantId + ") to fleet");
-                    }
-
-                    fleet.setAI(null);
-                    currentLocation.addEntity(fleet);
-                }
-                fleet.setLocation(x, y);
-                fleet.setTransponderOn(transponder);
-                LOGGER.log(Level.DEBUG, "Updated fleet for player " + senderPlayerId + " at [" + x + ", " + y + "] in " + starSystem);
-            } else {
-                CampaignFleetAPI fleet = (CampaignFleetAPI) sector.getEntityById(senderPlayerId);
-                if (fleet != null) {
-                    fleet.despawn();
-                }
-                LOGGER.log(Level.DEBUG, "Fleet not updated for " + senderPlayerId + ": different system (" + starSystem + " vs " + currentSystemName + ")");
-            }
-        } catch (Exception e) {
-            LOGGER.log(Level.ERROR, "Error handling fleet update: " + e.getMessage());
         }
     }
 }

@@ -1,0 +1,12 @@
+{
+	"gameSettings": {
+		"mode": "server"
+	},
+	"clientSettings": {
+		"serverIp": "127.0.0.1",
+		"serverPort": 4444
+	},
+	"serverSettings": {
+		"port": 4444
+	}
+}

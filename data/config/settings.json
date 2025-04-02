@@ -1,6 +1,6 @@
 {
 	"gameSettings": {
-		"mode": "client"
+		"mode": "server"
 	},
 	"clientSettings": {
 		"serverIp": "127.0.0.1",

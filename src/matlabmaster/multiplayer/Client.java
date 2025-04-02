@@ -1,6 +1,7 @@
 package matlabmaster.multiplayer;
 
 import com.fs.starfarer.api.Global;
+import com.fs.starfarer.api.campaign.JumpPointAPI;
 import com.fs.starfarer.api.campaign.PlanetAPI;
 import com.fs.starfarer.api.campaign.SectorEntityToken;
 import com.fs.starfarer.api.campaign.StarSystemAPI;
@@ -115,13 +116,21 @@ public class Client implements MessageSender, MessageReceiver {
     }
     public static void handleOrbitingBodiesUpdate(JSONObject data){
         try {
-            JSONArray planets = data.getJSONArray("planet");
+            JSONArray planets = data.getJSONArray("planets");
+            JSONArray jumpPoints = data.getJSONArray("jumpPoints");
             for (int i = 0; i < planets.length(); i++) {
                 JSONObject planetData = planets.getJSONObject(i);
-                String planetId = planetData.getString("PId");
+                String planetId = planetData.getString("id");
                 float angle = (float) planetData.getDouble("a");
                 PlanetAPI planet = (PlanetAPI) Global.getSector().getEntityById(planetId);
                 if (planet != null) planet.setCircularOrbitAngle(angle);
+            }
+            for (int i = 0; i < jumpPoints.length(); i++) {
+                JSONObject jumpPointData = jumpPoints.getJSONObject(i);
+                String jumpPointId = jumpPointData.getString("id");
+                float angle = (float) jumpPointData.getDouble("a");
+                JumpPointAPI jumpPoint = (JumpPointAPI) Global.getSector().getEntityById(jumpPointId);
+                if (jumpPoint != null) jumpPoint.setCircularOrbitAngle(angle);
             }
         } catch (Exception e) {
             LOGGER.log(Level.ERROR, "Error handling orbiting bodies update: " + e.getMessage());

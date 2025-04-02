@@ -1,6 +1,7 @@
 package matlabmaster.multiplayer;
 
 import com.fs.starfarer.api.Global;
+import com.fs.starfarer.api.campaign.JumpPointAPI;
 import com.fs.starfarer.api.campaign.PlanetAPI;
 import com.fs.starfarer.api.campaign.SectorEntityToken;
 import com.fs.starfarer.api.campaign.StarSystemAPI;
@@ -161,15 +162,23 @@ public class Server implements MessageSender, MessageReceiver {
                 message.put("playerId","server");
                 StarSystemAPI system = Global.getSector().getStarSystem(systemName);
                 JSONArray planets = new JSONArray();
+                JSONArray jumpPoints = new JSONArray();
                 for (SectorEntityToken entity : system.getAllEntities()) {
                     if (entity instanceof PlanetAPI) {
                         JSONObject planet = new JSONObject();
-                        planet.put("PId", entity.getId());
+                        planet.put("id", entity.getId());
                         planet.put("a", entity.getCircularOrbitAngle());
                         planets.put(planet);
                     }
+                    if (entity instanceof JumpPointAPI){
+                        JSONObject jumpPoint = new JSONObject();
+                        jumpPoint.put("id", entity.getId());
+                        jumpPoint.put("a", entity.getCircularOrbitAngle());
+                        jumpPoints.put(jumpPoint);
+                    }
                 }
-                message.put("planet",planets);
+                message.put("jumpPoints", jumpPoints);
+                message.put("planets",planets);
                 sender.sendMessage(message.toString());
             } catch (JSONException e) {
                 LOGGER.log(Level.ERROR, "Failed to construct JSON message: " + e.getMessage());

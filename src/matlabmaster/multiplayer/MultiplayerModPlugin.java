@@ -84,6 +84,7 @@ public class MultiplayerModPlugin extends BaseModPlugin {
         Global.getSector().addTransientScript(new FastUpdateScript());
         Global.getSector().addTransientScript(new SlowUpdateScript());
         Global.getSector().addTransientScript(new MessageProcessingScript());
+        Global.getSector().addTransientScript(new DebugScript());
     }
 
     public static JSONObject getSettings() {

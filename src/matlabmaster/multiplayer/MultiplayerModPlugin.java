@@ -2,7 +2,9 @@ package matlabmaster.multiplayer;
 
 import com.fs.starfarer.api.BaseModPlugin;
 import com.fs.starfarer.api.Global;
-import com.fs.starfarer.api.campaign.CampaignClockAPI;
+import matlabmaster.multiplayer.events.HyperspaceEntryScript;
+import matlabmaster.multiplayer.events.SystemEntryScript;
+import matlabmaster.multiplayer.events.UnpauseScript;
 import org.apache.log4j.Level;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -85,6 +87,9 @@ public class MultiplayerModPlugin extends BaseModPlugin {
         Global.getSector().addTransientScript(new SlowUpdateScript());
         Global.getSector().addTransientScript(new MessageProcessingScript());
         Global.getSector().addTransientScript(new DebugScript());
+        Global.getSector().addTransientScript(new SystemEntryScript());
+        Global.getSector().addTransientScript(new HyperspaceEntryScript());
+        Global.getSector().addTransientScript(new UnpauseScript());
     }
 
     public static JSONObject getSettings() {

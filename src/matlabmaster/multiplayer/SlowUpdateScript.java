@@ -30,20 +30,6 @@ public class SlowUpdateScript implements EveryFrameScript {
         timer += amount;
         if (timer >= INTERVAL) {
             timer -= INTERVAL; // Reset with remainder
-            orbitUpdateRequest();
-        }
-    }
-
-    public void orbitUpdateRequest(){
-        StarSystemAPI currentLocation = Global.getSector().getPlayerFleet().getStarSystem();
-        if (Objects.equals(MultiplayerModPlugin.getMode(), "client")) {
-            if (currentLocation != null) {
-                try {
-                    Client.requestOrbitingBodiesUpdate(currentLocation.getBaseName());
-                } catch (JSONException e) {
-                    throw new RuntimeException(e);
-                }
-            }
         }
     }
 }

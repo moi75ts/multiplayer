@@ -1,10 +1,7 @@
 package matlabmaster.multiplayer;
 
 import com.fs.starfarer.api.Global;
-import com.fs.starfarer.api.campaign.JumpPointAPI;
-import com.fs.starfarer.api.campaign.PlanetAPI;
-import com.fs.starfarer.api.campaign.SectorEntityToken;
-import com.fs.starfarer.api.campaign.StarSystemAPI;
+import com.fs.starfarer.api.campaign.*;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.log4j.LogManager;
@@ -160,29 +157,27 @@ public class Server implements MessageSender, MessageReceiver {
                 JSONObject message = new JSONObject();
                 message.put("command", 6);
                 message.put("playerId","server");
-                StarSystemAPI system = Global.getSector().getStarSystem(systemName);
-                JSONArray planets = new JSONArray();
-                JSONArray jumpPoints = new JSONArray();
-                for (SectorEntityToken entity : system.getAllEntities()) {
-                    if (entity instanceof PlanetAPI) {
-                        JSONObject planet = new JSONObject();
-                        planet.put("id", entity.getId());
-                        planet.put("a", entity.getCircularOrbitAngle());
-                        planets.put(planet);
-                    }
-                    if (entity instanceof JumpPointAPI){
-                        JSONObject jumpPoint = new JSONObject();
-                        jumpPoint.put("id", entity.getId());
-                        jumpPoint.put("a", entity.getCircularOrbitAngle());
-                        jumpPoints.put(jumpPoint);
+                LocationAPI system = Global.getSector().getPlayerFleet().getStarSystem();
+                List<SectorEntityToken> stableLocations = system.getAllEntities();
+                JSONArray toSync = new JSONArray();
+                for(SectorEntityToken entity : stableLocations){
+                    if(entity.getCustomEntityType() == "orbital_junk" || entity.getCustomEntityType() == "null") {
+                        //don't sync useless / not important
+                    }else{
+                        JSONObject thing = new JSONObject();
+                        thing.put("id", entity.getId());
+                        thing.put("a",entity.getCircularOrbitAngle());
+                        toSync.put(thing);
                     }
                 }
-                message.put("jumpPoints", jumpPoints);
-                message.put("planets",planets);
+                message.put("toSync",toSync);
                 sender.sendMessage(message.toString());
             } catch (JSONException e) {
                 LOGGER.log(Level.ERROR, "Failed to construct JSON message: " + e.getMessage());
             }
         }
+    }
+    public static void sendStarscapeUpdate(){
+
     }
 }

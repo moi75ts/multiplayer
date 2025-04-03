@@ -3,6 +3,7 @@ package matlabmaster.multiplayer;
 import com.fs.starfarer.api.BaseModPlugin;
 import com.fs.starfarer.api.Global;
 import matlabmaster.multiplayer.events.HyperspaceEntryScript;
+import matlabmaster.multiplayer.events.OnMultiplayerGameLoad;
 import matlabmaster.multiplayer.events.SystemEntryScript;
 import matlabmaster.multiplayer.events.UnpauseScript;
 import org.apache.log4j.Level;
@@ -90,6 +91,12 @@ public class MultiplayerModPlugin extends BaseModPlugin {
         Global.getSector().addTransientScript(new SystemEntryScript());
         Global.getSector().addTransientScript(new HyperspaceEntryScript());
         Global.getSector().addTransientScript(new UnpauseScript());
+
+        try {
+            OnMultiplayerGameLoad.onGameLoad();
+        } catch (JSONException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public static JSONObject getSettings() {

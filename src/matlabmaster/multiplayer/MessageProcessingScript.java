@@ -17,7 +17,7 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class MessageProcessingScript implements EveryFrameScript {
-    private static final Logger LOGGER = LogManager.getLogger("multiplayer");
+    private static final Logger LOGGER = LogManager.getLogger("MessageProcessingScript");
 
     @Override
     public boolean isDone() {
@@ -43,6 +43,9 @@ public class MessageProcessingScript implements EveryFrameScript {
                 int command = data.getInt("command");
 
                 switch (command) {
+                    case 4:
+                        handleStarscapeUpdate(data);
+                        break;
                     case 5: // Fleet position update
                         handleFleetUpdate(data);
                         break;
@@ -114,7 +117,18 @@ public class MessageProcessingScript implements EveryFrameScript {
                 Client.handleOrbitingBodiesUpdate(data);
             }
         } catch (Exception e) {
-            LOGGER.log(Level.ERROR, "Error handling slow update: " + e.getMessage());
+            LOGGER.log(Level.ERROR, "Error handling orbit update: " + e.getMessage());
+        }
+    }
+    private void handleStarscapeUpdate(JSONObject data) {
+        try {
+            if (Objects.equals(MultiplayerModPlugin.getMode(), "server")) {
+                Server.sendStarscapeUpdate();
+            } else {
+                Client.handleStarscapeUpdate(data);
+            }
+        } catch (Exception e) {
+            LOGGER.log(Level.ERROR, "Error handling starscape update: " + e.getMessage());
         }
     }
 }

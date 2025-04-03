@@ -178,6 +178,78 @@ public class Server implements MessageSender, MessageReceiver {
         }
     }
     public static void sendStarscapeUpdate(){
+        MessageSender sender = MultiplayerModPlugin.getMessageSender();
+        if (sender != null && sender.isActive()) {
+            try{
+                //Command boilerplate
+                JSONObject message = new JSONObject();
+                message.put("command", 4);
+                message.put("playerId","server");
 
+                //Actual Systems data
+                JSONObject starscapeData = new JSONObject();
+
+                // Get all star systems
+                List<StarSystemAPI> systems = Global.getSector().getStarSystems();
+
+                for (StarSystemAPI system : systems) {
+                    JSONObject systemData = new JSONObject();
+
+                    // System ID
+                    systemData.put("id", system.getId());
+
+                    // Planets (including stars)
+                    JSONArray planetsArray = new JSONArray();
+                    for (SectorEntityToken entity : system.getAllEntities()) {
+                        if (entity instanceof PlanetAPI) {
+                            PlanetAPI planet = (PlanetAPI) entity;
+                            JSONObject planetData = new JSONObject();
+                            planetData.put("name", planet.getName());
+                            planetData.put("id", planet.getId());
+                            planetData.put("size", planet.getRadius());
+                            planetData.put("type", planet.getTypeId());
+                            planetData.put("texture", planet.getCustomEntityType() != null ? planet.getCustomEntityType() : planet.getSpec().getTexture());
+                            planetData.put("isStar", planet.isStar());
+                            planetData.put("orbitPeriod", planet.getCircularOrbitPeriod());
+                            planetData.put("orbitAngle", planet.getCircularOrbitAngle());
+                            planetData.put("orbitRadius", planet.getCircularOrbitRadius());
+                            planetsArray.put(planetData);
+                        }
+                    }
+                    systemData.put("planets", planetsArray);
+
+                    // Jump Points (Gravity Wells)
+                    JSONArray jumpPointsArray = new JSONArray();
+                    for (SectorEntityToken entity : system.getJumpPoints()) {
+                        if (entity instanceof JumpPointAPI) {
+                            JumpPointAPI jumpPoint = (JumpPointAPI) entity;
+                            JSONObject jumpPointData = new JSONObject();
+                            jumpPointData.put("name", jumpPoint.getName());
+                            jumpPointData.put("id", jumpPoint.getId());
+                            jumpPointData.put("destinationSystemId", jumpPoint.getDestinations().isEmpty() ? "none" : jumpPoint.getDestinationStarSystem());
+                            jumpPointData.put("locationInSystemX", jumpPoint.getLocation().x);
+                            jumpPointData.put("locationInSystemY", jumpPoint.getLocation().y);
+                            jumpPointsArray.put(jumpPointData);
+                        }
+                    }
+                    systemData.put("jumpPoints", jumpPointsArray);
+
+                    // Hyperspace Coordinates
+                    JSONObject hyperspaceCoords = new JSONObject();
+                    hyperspaceCoords.put("x", system.getLocation().x);
+                    hyperspaceCoords.put("y", system.getLocation().y);
+                    systemData.put("hyperspaceCoordinates", hyperspaceCoords);
+
+                    // Add system to root JSON object
+                    starscapeData.put(system.getName(), systemData);
+
+                    message.put("StarscapeData", starscapeData);
+
+                }
+                sender.sendMessage(message.toString());
+            }catch (JSONException e) {
+                LOGGER.log(Level.ERROR, "Failed to construct JSON message: " + e.getMessage());
+            }
+        }
     }
 }

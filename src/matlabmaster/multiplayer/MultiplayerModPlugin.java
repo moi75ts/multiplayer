@@ -87,7 +87,6 @@ public class MultiplayerModPlugin extends BaseModPlugin {
         Global.getSector().addTransientScript(new FastUpdateScript());
         Global.getSector().addTransientScript(new SlowUpdateScript());
         Global.getSector().addTransientScript(new MessageProcessingScript());
-        Global.getSector().addTransientScript(new DebugScript());
         Global.getSector().addTransientScript(new SystemEntryScript());
         Global.getSector().addTransientScript(new HyperspaceEntryScript());
         Global.getSector().addTransientScript(new UnpauseScript());

@@ -197,6 +197,8 @@ public class Server implements MessageSender, MessageReceiver {
 
                     // System ID
                     systemData.put("id", system.getId());
+                    systemData.put("coordx", system.getLocation().x);
+                    systemData.put("coordy", system.getLocation().y);
 
                     // Planets (including stars)
                     JSONArray planetsArray = new JSONArray();

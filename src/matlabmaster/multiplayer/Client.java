@@ -2,6 +2,7 @@ package matlabmaster.multiplayer;
 
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.*;
+import matlabmaster.multiplayer.utils.RemoveStarSystem;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.log4j.LogManager;
@@ -151,50 +152,88 @@ public class Client implements MessageSender, MessageReceiver {
         List<StarSystemAPI> currentSystems = sector.getStarSystems();
         List<String> jsonSystemIds = new ArrayList<>();
 
-        // Collect all system IDs from JSON data
+        // Collect all system IDs from JSON data and their coordinates
         Iterator<String> jsonKeys = starscapeData.keys();
+        JSONObject jsonSystemCoords = new JSONObject(); // To store system ID and its coords from JSON
         while (jsonKeys.hasNext()) {
             String systemName = jsonKeys.next();
             JSONObject systemData = starscapeData.getJSONObject(systemName);
             String systemId = systemData.getString("id");
             jsonSystemIds.add(systemId);
+            // Store coordinates
+            float coordX = (float) systemData.getDouble("coordx");
+            float coordY = (float) systemData.getDouble("coordy");
+            jsonSystemCoords.put(systemId, new JSONObject().put("x", coordX).put("y", coordY));
         }
 
-        // Step 1: Remove systems that exist in the game but not in JSON
+        // Step 1: Check and remove systems that either don't exist in JSON or have mismatched coordinates
         Iterator<StarSystemAPI> systemIterator = currentSystems.iterator();
         while (systemIterator.hasNext()) {
             StarSystemAPI system = systemIterator.next();
-            if (!jsonSystemIds.contains(system.getId())) {
-                sector.removeStarSystem(system);
+            String systemId = system.getId();
+            boolean shouldRemove = !jsonSystemIds.contains(systemId); // Not in JSON
+
+            if (!shouldRemove && jsonSystemIds.contains(systemId)) {
+                // System exists in both, check coordinates
+                JSONObject jsonCoords = jsonSystemCoords.getJSONObject(systemId);
+                float jsonX = (float) jsonCoords.getDouble("x");
+                float jsonY = (float) jsonCoords.getDouble("y");
+                float currentX = system.getLocation().getX();
+                float currentY = system.getLocation().getY();
+
+                // Define a small tolerance for floating-point comparison
+                float tolerance = 0.01f; // Adjust this value as needed
+
+                if (Math.abs(jsonX - currentX) > tolerance || Math.abs(jsonY - currentY) > tolerance) {
+                    shouldRemove = true; // Coordinates don't match, remove and re-add
+                    Global.getLogger(Client.class).info("Coordinates mismatch for system: " + systemId + ". Removing and re-adding.");
+                }
+            }
+
+            if (shouldRemove) {
+                RemoveStarSystem.removeStarSystem(systemId);
                 systemIterator.remove(); // Safely remove from the list
-                Global.getLogger(Client.class).info("Removed system: " + system.getId());
+                Global.getLogger(Client.class).info("Removed system: " + systemId);
             }
         }
 
-        // Step 2 & 3: Add missing systems from JSON and skip existing ones
+        // Step 2 & 3: Add missing systems from JSON and skip existing ones (now with correct coordinates)
         jsonKeys = starscapeData.keys(); // Reset iterator
         while (jsonKeys.hasNext()) {
             String systemName = jsonKeys.next();
             JSONObject systemData = starscapeData.getJSONObject(systemName);
             String systemId = systemData.getString("id");
 
-            // Check if the system already exists
-            boolean systemExists = false;
+            // Check if the system already exists and matches coordinates (we handled mismatches above)
+            boolean systemExistsAndMatches = false;
             for (StarSystemAPI system : currentSystems) {
                 if (system.getId().equals(systemId)) {
-                    systemExists = true;
-                    break;
+                    float currentX = system.getLocation().getX();
+                    float currentY = system.getLocation().getY();
+                    float jsonX = (float) systemData.getDouble("coordx");
+                    float jsonY = (float) systemData.getDouble("coordy");
+                    float tolerance = 0.01f;
+
+                    if (Math.abs(jsonX - currentX) <= tolerance && Math.abs(jsonY - currentY) <= tolerance) {
+                        systemExistsAndMatches = true;
+                        break;
+                    }
                 }
             }
 
-            if (!systemExists) {
-                // Create new system
-                StarSystemAPI newSystem = sector.createStarSystem(systemId);
+            if (!systemExistsAndMatches) {
+                // Create or update system
+                StarSystemAPI newSystem = sector.getStarSystem(systemId);
+                if (newSystem == null) {
+                    newSystem = sector.createStarSystem(systemId); // Create if it doesn't exist
+                }
+
                 newSystem.setName(systemName);
 
-                // Set hyperspace coordinates
-                JSONObject hyperspaceCoords = systemData.getJSONObject("hyperspaceCoordinates");
-                newSystem.getLocation().set((float) hyperspaceCoords.getDouble("x"), (float) hyperspaceCoords.getDouble("y"));
+                // Update hyperspace coordinates
+                float coordX = (float) systemData.getDouble("coordx");
+                float coordY = (float) systemData.getDouble("coordy");
+                newSystem.getLocation().set(coordX, coordY);
 
                 // Add planets (including stars)
                 JSONArray planetsArray = systemData.getJSONArray("planets");
@@ -218,41 +257,10 @@ public class Client implements MessageSender, MessageReceiver {
                     }
                 }
 
-                // Add jump points
-                //JSONArray jumpPointsArray = systemData.getJSONArray("jumpPoints");
-                //for (int i = 0; i < jumpPointsArray.length(); i++) {
-                //    JSONObject jumpPointData = jumpPointsArray.getJSONObject(i);
-                //    String jumpPointId = jumpPointData.getString("id"); // Fixed typo "id?"
-                //    String name = jumpPointData.getString("name");
-                //    float x = (float) jumpPointData.getDouble("locationInSystemX");
-                //    float y = (float) jumpPointData.getDouble("locationInSystemY");
-//
-                //    // Create jump point using addCustomEntity
-                //    SectorEntityToken jumpPointEntity = newSystem.addCustomEntity(
-                //            jumpPointId,           // ID
-                //            name,                  // Name
-                //            "jump_point",          // Entity type
-                //            "neutral"                   // Faction
-                //    );
-                //    jumpPointEntity.getLocation().set(x, y);
-//
-                //    // Cast to JumpPointAPI and link destinations
-                //    if (jumpPointEntity instanceof JumpPointAPI) {
-                //        JumpPointAPI jumpPoint = (JumpPointAPI) jumpPointEntity;
-                //        String destinationId = jumpPointData.getString("destinationSystemId");
-                //        if (!destinationId.equals("none")) {
-                //            for (StarSystemAPI destSystem : sector.getStarSystems()) {
-                //                if (destSystem.getId().equals(destinationId)) {
-                //                    SectorEntityToken destinationEntity = destSystem.getStar() != null ? destSystem.getStar() : destSystem.getCenter();
-                //                    jumpPoint.addDestination(new JumpPointAPI.JumpDestination(destinationEntity, "Jump to " + destSystem.getName()));
-                //                    break;
-                //                }
-                //            }
-                //        }
-                //    }
-                //}
+                // Note: Jump points handling is commented out in your original code, so I'm skipping it here too.
 
-                Global.getLogger(Client.class).info("Added system: " + systemId);
+                Global.getLogger(Client.class).info("Added/Updated system: " + systemId + " at coordinates (" + coordX + ", " + coordY + ")");
+                currentSystems.add(newSystem); // Add back to our tracking list if newly created
             }
         }
     }

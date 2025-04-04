@@ -2,6 +2,8 @@ package matlabmaster.multiplayer;
 
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.*;
+import com.fs.starfarer.campaign.BaseLocation;
+import com.fs.starfarer.campaign.CampaignPlanet;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.log4j.LogManager;
@@ -150,43 +152,45 @@ public class Server implements MessageSender, MessageReceiver {
     }
 
     public static void sendOrbitingBodiesUpdate(String systemName) throws JSONException {
-        //client method
         MessageSender sender = MultiplayerModPlugin.getMessageSender();
         if (sender != null && sender.isActive()) {
-            try{
+            try {
                 JSONObject message = new JSONObject();
                 message.put("command", 6);
-                message.put("playerId","server");
+                message.put("playerId", "server");
                 LocationAPI system = Global.getSector().getPlayerFleet().getStarSystem();
                 List<SectorEntityToken> stableLocations = system.getAllEntities();
                 JSONArray toSync = new JSONArray();
-                for(SectorEntityToken entity : stableLocations){
-                    if(entity.getCustomEntityType() == "orbital_junk" || entity.getCustomEntityType() == "null") {
-                        //don't sync useless / not important
-                    }else{
+                for (SectorEntityToken entity : stableLocations) {
+                    if (entity.getCustomEntityType() == "orbital_junk" || entity.getCustomEntityType() == "null") {
+                        // don't sync useless / not important
+                    } else {
                         JSONObject thing = new JSONObject();
                         thing.put("id", entity.getId());
-                        thing.put("a",entity.getCircularOrbitAngle());
+                        thing.put("a", entity.getCircularOrbitAngle());
                         toSync.put(thing);
                     }
                 }
-                message.put("toSync",toSync);
+                message.put("toSync", toSync);
                 sender.sendMessage(message.toString());
             } catch (JSONException e) {
                 LOGGER.log(Level.ERROR, "Failed to construct JSON message: " + e.getMessage());
             }
         }
     }
-    public static void sendStarscapeUpdate(){
+
+    public static void sendStarscapeUpdate() {
+        //todo sync warning beacons
+        //todo sync corona
         MessageSender sender = MultiplayerModPlugin.getMessageSender();
         if (sender != null && sender.isActive()) {
-            try{
-                //Command boilerplate
+            try {
+                // Command boilerplate
                 JSONObject message = new JSONObject();
                 message.put("command", 4);
-                message.put("playerId","server");
+                message.put("playerId", "server");
 
-                //Actual Systems data
+                // Actual Systems data
                 JSONObject starscapeData = new JSONObject();
 
                 // Get all star systems
@@ -195,13 +199,26 @@ public class Server implements MessageSender, MessageReceiver {
                 for (StarSystemAPI system : systems) {
                     JSONObject systemData = new JSONObject();
 
-                    // System ID
+                    // System ID and hyperspace coordinates
                     systemData.put("id", system.getId());
                     systemData.put("coordx", system.getLocation().x);
                     systemData.put("coordy", system.getLocation().y);
 
-                    // Planets (including stars)
+                    // Center information
+                    SectorEntityToken center = system.getCenter();
+                    if (center instanceof CampaignPlanet) {
+                        systemData.put("centerType", "CampaignPlanet");
+                    } else if (center instanceof BaseLocation.LocationToken) {
+                        systemData.put("centerType", "LocationToken");
+                    } else {
+                        systemData.put("centerType", "Unknown");
+                    }
+                    systemData.put("centerx", center.getLocation().x);
+                    systemData.put("centery", center.getLocation().y);
+
+                    // Planets (including all stars)
                     JSONArray planetsArray = new JSONArray();
+                    List<PlanetAPI> stars = new ArrayList<>();
                     for (SectorEntityToken entity : system.getAllEntities()) {
                         if (entity instanceof PlanetAPI) {
                             PlanetAPI planet = (PlanetAPI) entity;
@@ -212,13 +229,28 @@ public class Server implements MessageSender, MessageReceiver {
                             planetData.put("type", planet.getTypeId());
                             planetData.put("texture", planet.getCustomEntityType() != null ? planet.getCustomEntityType() : planet.getSpec().getTexture());
                             planetData.put("isStar", planet.isStar());
-                            planetData.put("orbitPeriod", planet.getCircularOrbitPeriod());
-                            planetData.put("orbitAngle", planet.getCircularOrbitAngle());
-                            planetData.put("orbitRadius", planet.getCircularOrbitRadius());
+                            planetData.put("locationX", planet.getLocation().x);
+                            planetData.put("locationY", planet.getLocation().y);
+
+                            // Orbital parameters (if orbiting something)
+                            if (planet.getOrbit() != null && planet.getOrbit().getFocus() != null) {
+                                SectorEntityToken focus = planet.getOrbit().getFocus();
+                                planetData.put("orbitFocusId", focus.getId());
+                                planetData.put("orbitPeriod", planet.getCircularOrbitPeriod());
+                                planetData.put("orbitAngle", planet.getCircularOrbitAngle());
+                                planetData.put("orbitRadius", planet.getCircularOrbitRadius());
+                            } else {
+                                planetData.put("orbitFocusId", "none");
+                            }
+
                             planetsArray.put(planetData);
+                            if (planet.isStar()) {
+                                stars.add(planet);
+                            }
                         }
                     }
                     systemData.put("planets", planetsArray);
+                    systemData.put("starCount", stars.size()); // Indicate number of stars
 
                     // Jump Points (Gravity Wells)
                     JSONArray jumpPointsArray = new JSONArray();
@@ -244,12 +276,13 @@ public class Server implements MessageSender, MessageReceiver {
 
                     // Add system to root JSON object
                     starscapeData.put(system.getName(), systemData);
-
-                    message.put("StarscapeData", starscapeData);
-
                 }
+                //now sync the constellations please
+
+
+                message.put("StarscapeData", starscapeData);
                 sender.sendMessage(message.toString());
-            }catch (JSONException e) {
+            } catch (JSONException e) {
                 LOGGER.log(Level.ERROR, "Failed to construct JSON message: " + e.getMessage());
             }
         }

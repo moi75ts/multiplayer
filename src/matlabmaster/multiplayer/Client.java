@@ -14,6 +14,7 @@ import org.json.JSONObject;
 import java.io.*;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 
@@ -204,7 +205,7 @@ public class Client implements MessageSender, MessageReceiver {
             JSONObject systemData = starscapeData.getJSONObject(systemName);
             String systemId = systemData.getString("id");
 
-            // Check if the system already exists and matches coordinates (we handled mismatches above)
+            // Check if the system already exists and matches coordinates
             boolean systemExistsAndMatches = false;
             for (StarSystemAPI system : currentSystems) {
                 if (system.getId().equals(systemId)) {
@@ -233,34 +234,92 @@ public class Client implements MessageSender, MessageReceiver {
                 // Update hyperspace coordinates
                 float coordX = (float) systemData.getDouble("coordx");
                 float coordY = (float) systemData.getDouble("coordy");
+                float centerX = (float) systemData.getDouble("centerx");
+                float centerY = (float) systemData.getDouble("centery");
                 newSystem.getLocation().set(coordX, coordY);
 
-                // Add planets (including stars)
+                // Handle center type and multi-star systems
+                String centerType = systemData.getString("centerType");
+                int starCount = systemData.getInt("starCount");
                 JSONArray planetsArray = systemData.getJSONArray("planets");
-                PlanetAPI star = null; // Track the star for orbits
-                for (int i = 0; i < planetsArray.length(); i++) {
-                    JSONObject planetData = planetsArray.getJSONObject(i);
-                    String planetId = planetData.getString("id");
-                    String type = planetData.getString("type");
-                    float size = (float) planetData.getDouble("size");
-                    float orbitRadius = (float) planetData.getDouble("orbitRadius");
-                    float orbitAngle = (float) planetData.getDouble("orbitAngle");
-                    float orbitPeriod = (float) planetData.getDouble("orbitPeriod");
-                    boolean isStar = planetData.getBoolean("isStar");
 
-                    PlanetAPI planet;
-                    if (isStar) {
-                        planet = newSystem.initStar(planetId, type, size, orbitRadius);
-                        star = planet; // Save star for orbiting planets
-                    } else {
-                        planet = newSystem.addPlanet(planetId, star, planetData.getString("name"), type, orbitAngle, size, orbitRadius, orbitPeriod);
+                // Map to store planets/stars by ID for orbit focus resolution
+                HashMap<String, SectorEntityToken> entityMap = new HashMap<>();
+
+                if ("LocationToken".equals(centerType)) {
+                    // Create an empty system center
+                    SectorEntityToken center = newSystem.addCustomEntity(null, "System Center", "stable_location", null);
+                    center.getLocation().set(centerX, centerY);
+                    newSystem.setCenter(center);
+                    entityMap.put("system_center", center); // Add to map for potential orbits
+                } else if ("CampaignPlanet".equals(centerType)) {
+                    // Handle stars and planets
+                    PlanetAPI primaryStar = null;
+
+                    // First pass: Create all stars and planets without orbits
+                    for (int i = 0; i < planetsArray.length(); i++) {
+                        JSONObject planetData = planetsArray.getJSONObject(i);
+                        String planetId = planetData.getString("id");
+                        String type = planetData.getString("type");
+                        float size = (float) planetData.getDouble("size");
+                        boolean isStar = planetData.getBoolean("isStar");
+                        float locationX = (float) planetData.getDouble("locationX");
+                        float locationY = (float) planetData.getDouble("locationY");
+
+                        if (entityMap.containsKey(planetId)) {
+                            continue; // Skip if already created
+                        }
+
+                        PlanetAPI planet;
+                        if (isStar && primaryStar == null) {
+                            // First star becomes the center
+                            planet = newSystem.initStar(planetId, type, size, 1000f); // Default radius for initStar
+                            planet.getLocation().set(locationX, locationY);
+                            primaryStar = planet;
+                        } else if (isStar) {
+                            // Additional stars added without orbit initially
+                            planet = newSystem.addPlanet(planetId, null, planetData.getString("name"), type, 0f, size, 0f, 0f);
+                            planet.getLocation().set(locationX, locationY);
+                        } else {
+                            // Non-star planets added without orbit initially
+                            planet = newSystem.addPlanet(planetId, null, planetData.getString("name"), type, 0f, size, 0f, 0f);
+                            planet.getLocation().set(locationX, locationY);
+                        }
+                        entityMap.put(planetId, planet);
                     }
+
+                    // Second pass: Update orbits for stars and planets
+                    for (int i = 0; i < planetsArray.length(); i++) {
+                        JSONObject planetData = planetsArray.getJSONObject(i);
+                        String planetId = planetData.getString("id");
+                        String orbitFocusId = planetData.getString("orbitFocusId");
+
+                        if (!"none".equals(orbitFocusId)) {
+                            float orbitRadius = (float) planetData.getDouble("orbitRadius");
+                            float orbitAngle = (float) planetData.getDouble("orbitAngle");
+                            float orbitPeriod = (float) planetData.getDouble("orbitPeriod");
+
+                            SectorEntityToken focus = entityMap.get(orbitFocusId);
+                            PlanetAPI planet = (PlanetAPI) entityMap.get(planetId);
+
+                            if (focus != null && planet != null && planet.getOrbit() == null) {
+                                // Set orbit without recreating the entity
+                                planet.setCircularOrbit(focus, orbitAngle, orbitRadius, orbitPeriod);
+                            }
+                        }
+                    }
+
+                    if (primaryStar != null) {
+                        newSystem.setCenter(primaryStar);
+                    }
+                } else {
+                    LOGGER.log(Level.WARN, "Unknown centerType '" + centerType + "' for system: " + systemId);
                 }
 
-                // Note: Jump points handling is commented out in your original code, so I'm skipping it here too.
-
                 Global.getLogger(Client.class).info("Added/Updated system: " + systemId + " at coordinates (" + coordX + ", " + coordY + ")");
+                Global.getLogger(Client.class).info("Center type: " + centerType + ", Star count: " + starCount);
                 currentSystems.add(newSystem); // Add back to our tracking list if newly created
+                newSystem.autogenerateHyperspaceJumpPoints();
             }
         }
     }

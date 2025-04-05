@@ -123,7 +123,9 @@ public class Client implements MessageSender, MessageReceiver {
                 String id = objectData.getString("id");
                 float angle = (float) objectData.getDouble("a");
                 if (Global.getSector().getEntityById(id) != null) {
-                    Global.getSector().getEntityById(id).setCircularOrbitAngle(angle);
+                    SectorEntityToken token = Global.getSector().getEntityById(id);
+                    token.setCircularOrbitAngle(angle);
+                    token.getId();
                 }
             }
         } catch (Exception e) {

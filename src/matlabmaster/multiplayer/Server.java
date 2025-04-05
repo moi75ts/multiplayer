@@ -4,6 +4,7 @@ import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.*;
 import com.fs.starfarer.campaign.BaseLocation;
 import com.fs.starfarer.campaign.CampaignPlanet;
+import com.fs.starfarer.combat.entities.terrain.Planet;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.log4j.LogManager;
@@ -160,7 +161,7 @@ public class Server implements MessageSender, MessageReceiver {
                 JSONObject message = new JSONObject();
                 message.put("command", 6);
                 message.put("playerId", "server");
-                LocationAPI system = Global.getSector().getPlayerFleet().getStarSystem();
+                LocationAPI system = Global.getSector().getStarSystem(systemName);
                 List<SectorEntityToken> stableLocations = system.getAllEntities();
                 JSONArray toSync = new JSONArray();
                 for (SectorEntityToken entity : stableLocations) {
@@ -241,8 +242,18 @@ public class Server implements MessageSender, MessageReceiver {
                         planetData.put("orbitAngle",planet.getCircularOrbitAngle());
                         planetData.put("orbitPeriod",planet.getCircularOrbitPeriod());
                         planetData.put("orbitRadius",planet.getCircularOrbitRadius());
+                        try {
+                            planetData.put("orbitFocusId",planet.getOrbitFocus().getId());
+                        }catch (Exception e){
+                            //no orbit focus
+                        }
                         planetData.put("radius",planet.getRadius());
                         planetData.put("isStar",planet.isStar());
+                        if(planet.isStar()){
+                            planetData.put("hyperspaceLocationX", planet.getLocationInHyperspace().x);
+                            planetData.put("hyperspaceLocationY", planet.getLocationInHyperspace().y);
+                            planetData.put("coronaSize",planet.getSpec().getCoronaSize());
+                        }
                         planetList.put(planetData);
                     }
                     systemData.put("planets",planetList);

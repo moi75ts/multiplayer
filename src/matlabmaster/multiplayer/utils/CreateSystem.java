@@ -3,10 +3,9 @@ package matlabmaster.multiplayer.utils;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.PlanetAPI;
 import com.fs.starfarer.api.campaign.SectorAPI;
+import com.fs.starfarer.api.campaign.SectorEntityToken;
 import com.fs.starfarer.api.campaign.StarSystemAPI;
-import com.fs.starfarer.api.impl.campaign.procgen.Constellation;
-import com.fs.starfarer.api.impl.campaign.procgen.StarAge;
-import com.fs.starfarer.api.impl.campaign.procgen.StarSystemGenerator;
+import com.fs.starfarer.api.impl.campaign.procgen.*;
 import com.fs.starfarer.campaign.BaseLocation;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -21,51 +20,100 @@ public class CreateSystem {
             return;
         }
         SectorAPI sector = Global.getSector();
-        Object sectorAlreadyExist = null;
-        sectorAlreadyExist = sector.getStarSystem(data.getString("systemID"));
+        Object sectorAlreadyExist = sector.getStarSystem(data.getString("systemID"));
         if (sectorAlreadyExist != null) {
             return;
         }
-        System.out.println(data.getString("type"));
         StarSystemAPI newSystem = Global.getSector().createStarSystem(data.getString("systemID"));
         newSystem.setAge(StarAge.valueOf(data.getString("age")));
         newSystem.setType(StarSystemGenerator.StarSystemType.valueOf(data.getString("type")));
         newSystem.getLocation().setX((float) data.getDouble("locationx"));
         newSystem.getLocation().setY((float) data.getDouble("locationy"));
-        System.out.println(data.getString("constellation"));
-        if (data.getString("constellation") != null) {
-            Constellation constellation = new Constellation(Constellation.ConstellationType.valueOf(data.getString("constellationType")), StarAge.valueOf(data.getString("age")));
-            constellation.setNameOverride(data.getString("constellation"));
-            newSystem.setConstellation(constellation);
-        }
-        int i;
+        Constellation constellation = new Constellation(
+                Constellation.ConstellationType.valueOf(data.getString("constellationType")),
+                StarAge.valueOf(data.getString("age"))
+        );
+        String constellationName = data.getString("constellation");
+        constellation.setNameOverride(constellationName != null ? constellationName : "Unnamed Constellation");
+        NameGenData namepick = new NameGenData("name", "name2");
+        ProcgenUsedNames.NamePick namePick = new ProcgenUsedNames.NamePick(namepick, "name", "name");
+        constellation.setNamePick(namePick);
+        newSystem.setConstellation(constellation);
+
         JSONArray planets = data.getJSONArray("planets");
-        for (i = 0; i <= planets.length() - 1; i++) {
+        for (int i = 0; i < planets.length(); i++) {
             createPlanet(planets.getJSONObject(i), newSystem);
         }
-        if(newSystem.getCenter() == null){
 
+        if (!Objects.equals(data.getString("type"), "NEBULA")) {
+            newSystem.autogenerateHyperspaceJumpPoints(true, true, true);
         }
-        newSystem.autogenerateHyperspaceJumpPoints();
     }
 
     public static void createPlanet(JSONObject data, StarSystemAPI system) throws JSONException {
-        PlanetAPI planet = system.addPlanet(data.getString("planetid"),
-                null,
-                data.getString("name"),
-                data.getString("type"),
-                (float) data.getDouble("orbitAngle"),
-                (float) data.getDouble("radius"),
-                (float) data.getDouble("orbitRadius"),
-                (float) data.getDouble("orbitPeriod"));
-
-        if (data.getBoolean("isStar")) {
-            //TODO 100f is placeholder
-            system.initStar(planet.getId(), planet.getTypeId(), planet.getRadius(), 100f);
+        System.out.println("System Type: " + system.getType());
+        SectorEntityToken orbitFocus;
+        try {
+            orbitFocus = system.getEntityById(data.getString("orbitFocusId"));
+        }catch (Exception e){
+            // If no center exists (no star), create a default center point
+            orbitFocus = system.addCustomEntity(null, "System Center", "stable_location", null);
+            orbitFocus.setLocation(0, 0);
+            system.setCenter(orbitFocus);
         }
-        planet.setLocation((float) data.getDouble("locationx"), (float) data.getDouble("locationy"));
-        if(data.getDouble("locationx") == data.getDouble("locationy") && data.getDouble("locationy") == 0){
-            system.setCenter(planet);
+        if (data.getBoolean("isStar")) {
+            if (system.getStar() == null) {
+                // Create the primary star and set it as the center
+                system.initStar(data.getString("planetid"),
+                        data.getString("type"),
+                        (float) data.getDouble("radius"),
+                        (float) data.getDouble("hyperspaceLocationX"),
+                        (float) data.getDouble("hyperspaceLocationY"),
+                        (float) data.getDouble("coronaSize"));
+
+                system.getStar().setLocation((float) data.getDouble("locationx"), (float) data.getDouble("locationy"));
+                system.getStar().setName(data.getString("name"));
+                system.setCenter(system.getStar());
+            } else if (system.getSecondary() == null) {
+                // Create a secondary star orbiting the center (primary star)
+                PlanetAPI planet = system.addPlanet(data.getString("planetid"),
+                        orbitFocus,  // Orbit the primary star
+                        data.getString("name"),
+                        data.getString("type"),
+                        (float) data.getDouble("orbitAngle"),
+                        (float) data.getDouble("radius"),
+                        (float) data.getDouble("orbitRadius"),
+                        (float) data.getDouble("orbitPeriod"));
+
+                planet.setLocation((float) data.getDouble("locationx"), (float) data.getDouble("locationy"));
+                system.setSecondary(planet);
+            } else if (system.getTertiary() == null) {
+                // Create a tertiary star orbiting the center (primary star)
+                PlanetAPI planet = system.addPlanet(data.getString("planetid"),
+                        orbitFocus,  // Orbit the primary star
+                        data.getString("name"),
+                        data.getString("type"),
+                        (float) data.getDouble("orbitAngle"),
+                        (float) data.getDouble("radius"),
+                        (float) data.getDouble("orbitRadius"),
+                        (float) data.getDouble("orbitPeriod"));
+
+                planet.setLocation((float) data.getDouble("locationx"), (float) data.getDouble("locationy"));
+                system.setTertiary(planet);
+            }
+        } else {
+            // For non-star planets, ensure they orbit the system's center (star)
+
+            PlanetAPI planet = system.addPlanet(data.getString("planetid"),
+                    orbitFocus,  // Set focus to the center (star or custom entity)
+                    data.getString("name"),
+                    data.getString("type"),
+                    (float) data.getDouble("orbitAngle"),
+                    (float) data.getDouble("radius"),
+                    (float) data.getDouble("orbitRadius"),
+                    (float) data.getDouble("orbitPeriod"));
+
+            planet.setLocation((float) data.getDouble("locationx"), (float) data.getDouble("locationy"));
         }
     }
 }

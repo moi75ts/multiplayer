@@ -74,7 +74,7 @@ public class MessageProcessingScript implements EveryFrameScript {
             LocationAPI currentLocation = sector.getCurrentLocation();
             String currentSystemName = currentLocation != null ? currentLocation.getName() : "";
 
-            if (Objects.equals(starSystem, currentSystemName)) {
+            if (Objects.equals(starSystem.toLowerCase(), currentSystemName.toLowerCase())) {
                 CampaignFleetAPI fleet = (CampaignFleetAPI) sector.getEntityById(senderPlayerId);
                 if (fleet == null) {
                     fleet = Global.getFactory().createEmptyFleet("neutral", "Fleet of " + senderPlayerId, true);

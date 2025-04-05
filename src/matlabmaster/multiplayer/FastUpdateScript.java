@@ -51,7 +51,7 @@ public class FastUpdateScript implements EveryFrameScript {
                 JSONObject message = new JSONObject();
                 message.put("playerId", playerId);
                 message.put("command", 5);
-                message.put("x", Global.getSector().getPlayerFleet().getLocation().x);
+                message.put("x", Global.getSector().getPlayerFleet().getLocation().x );
                 message.put("y", Global.getSector().getPlayerFleet().getLocation().y);
                 message.put("starSystem", Global.getSector().getCurrentLocation().getName());
                 message.put("transponder", Global.getSector().getPlayerFleet().isTransponderOn());

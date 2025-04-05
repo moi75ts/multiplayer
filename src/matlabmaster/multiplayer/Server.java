@@ -10,12 +10,14 @@ import org.apache.log4j.LogManager;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.lwjgl.Sys;
 
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -179,111 +181,81 @@ public class Server implements MessageSender, MessageReceiver {
         }
     }
 
-    public static void sendStarscapeUpdate() {
+    public static void sendStarscapeUpdate() throws JSONException {
         //todo sync warning beacons
         //todo sync corona
         MessageSender sender = MultiplayerModPlugin.getMessageSender();
         if (sender != null && sender.isActive()) {
             try {
-                // Command boilerplate
                 JSONObject message = new JSONObject();
-                message.put("command", 4);
                 message.put("playerId", "server");
-
-                // Actual Systems data
-                JSONObject starscapeData = new JSONObject();
-
-                // Get all star systems
-                List<StarSystemAPI> systems = Global.getSector().getStarSystems();
-
-                for (StarSystemAPI system : systems) {
+                message.put("command", 4);
+                JSONObject systemsObject = new JSONObject();
+                SectorAPI sector = Global.getSector();
+                //step 1 get systems
+                List<StarSystemAPI>rawSystemData = sector.getStarSystems();
+                JSONArray systemList = new JSONArray();
+                //create system
+                for (StarSystemAPI system : rawSystemData){
+                    //deep space is hyperspace
+                    if(Objects.equals(system.getId(), "deep space")){
+                        continue;
+                    }
                     JSONObject systemData = new JSONObject();
-
-                    // System ID and hyperspace coordinates
-                    systemData.put("id", system.getId());
-                    systemData.put("coordx", system.getLocation().x);
-                    systemData.put("coordy", system.getLocation().y);
-
-                    // Center information
-                    SectorEntityToken center = system.getCenter();
-                    if (center instanceof CampaignPlanet) {
-                        systemData.put("centerType", "CampaignPlanet");
-                    } else if (center instanceof BaseLocation.LocationToken) {
-                        systemData.put("centerType", "LocationToken");
-                    } else {
-                        systemData.put("centerType", "Unknown");
+                    systemData.put("systemID", system.getId());
+                    systemData.put("type", system.getType());
+                    systemData.put("age", system.getAge());
+                    //not all systems are in a constellation
+                    try{
+                        systemData.put("constellation", system.getConstellation().getName());
+                        systemData.put("constellationType", system.getConstellation().getType().toString());
+                    }catch (NullPointerException e){
                     }
-                    systemData.put("centerx", center.getLocation().x);
-                    systemData.put("centery", center.getLocation().y);
-
-                    // Planets (including all stars)
-                    JSONArray planetsArray = new JSONArray();
-                    List<PlanetAPI> stars = new ArrayList<>();
-                    for (SectorEntityToken entity : system.getAllEntities()) {
-                        if (entity instanceof PlanetAPI) {
-                            PlanetAPI planet = (PlanetAPI) entity;
-                            JSONObject planetData = new JSONObject();
-                            planetData.put("name", planet.getName());
-                            planetData.put("id", planet.getId());
-                            planetData.put("size", planet.getRadius());
-                            planetData.put("type", planet.getTypeId());
-                            planetData.put("texture", planet.getCustomEntityType() != null ? planet.getCustomEntityType() : planet.getSpec().getTexture());
-                            planetData.put("isStar", planet.isStar());
-                            planetData.put("locationX", planet.getLocation().x);
-                            planetData.put("locationY", planet.getLocation().y);
-
-                            // Orbital parameters (if orbiting something)
-                            if (planet.getOrbit() != null && planet.getOrbit().getFocus() != null) {
-                                SectorEntityToken focus = planet.getOrbit().getFocus();
-                                planetData.put("orbitFocusId", focus.getId());
-                                planetData.put("orbitPeriod", planet.getCircularOrbitPeriod());
-                                planetData.put("orbitAngle", planet.getCircularOrbitAngle());
-                                planetData.put("orbitRadius", planet.getCircularOrbitRadius());
-                            } else {
-                                planetData.put("orbitFocusId", "none");
-                            }
-
-                            planetsArray.put(planetData);
-                            if (planet.isStar()) {
-                                stars.add(planet);
-                            }
-                        }
+                    systemData.put("locationx", system.getLocation().x);
+                    systemData.put("locationy", system.getLocation().y);
+                    //WARNING for center, must create planets in system before assigning centers
+                    //if the center is not a planet then create a newBaseLocation with at coords 0 0 (always)
+                    //else just set the center with the planetID
+                    systemData.put("centerid", system.getCenter().getId());
+                    if(system.getStar() != null){
+                        systemData.put("firstStar", system.getStar().getId());
                     }
-                    systemData.put("planets", planetsArray);
-                    systemData.put("starCount", stars.size()); // Indicate number of stars
-
-                    // Jump Points (Gravity Wells)
-                    JSONArray jumpPointsArray = new JSONArray();
-                    for (SectorEntityToken entity : system.getJumpPoints()) {
-                        if (entity instanceof JumpPointAPI) {
-                            JumpPointAPI jumpPoint = (JumpPointAPI) entity;
-                            JSONObject jumpPointData = new JSONObject();
-                            jumpPointData.put("name", jumpPoint.getName());
-                            jumpPointData.put("id", jumpPoint.getId());
-                            jumpPointData.put("destinationSystemId", jumpPoint.getDestinations().isEmpty() ? "none" : jumpPoint.getDestinationStarSystem());
-                            jumpPointData.put("locationInSystemX", jumpPoint.getLocation().x);
-                            jumpPointData.put("locationInSystemY", jumpPoint.getLocation().y);
-                            jumpPointsArray.put(jumpPointData);
-                        }
+                    if(system.getSecondary() != null){
+                        systemData.put("secondStar", system.getSecondary().getId());
                     }
-                    systemData.put("jumpPoints", jumpPointsArray);
+                    if(system.getTertiary() != null){
+                        systemData.put("thirdStar", system.getTertiary().getId());
+                    }
+                    //now we have all the data for creating a sector object
 
-                    // Hyperspace Coordinates
-                    JSONObject hyperspaceCoords = new JSONObject();
-                    hyperspaceCoords.put("x", system.getLocation().x);
-                    hyperspaceCoords.put("y", system.getLocation().y);
-                    systemData.put("hyperspaceCoordinates", hyperspaceCoords);
+                    //time to add the planets
+                    JSONArray planetList = new JSONArray();
+                    List<PlanetAPI> rawPlanetsData = system.getPlanets();
+                    for(PlanetAPI planet : rawPlanetsData){
+                        JSONObject planetData = new JSONObject();
+                        planetData.put("planetid", planet.getId());
+                        planetData.put("type", planet.getTypeId());
+                        planetData.put("name",planet.getName());
+                        planetData.put("locationx",planet.getLocation().x);
+                        planetData.put("locationy",planet.getLocation().y);
+                        planetData.put("orbitAngle",planet.getCircularOrbitAngle());
+                        planetData.put("orbitPeriod",planet.getCircularOrbitPeriod());
+                        planetData.put("orbitRadius",planet.getCircularOrbitRadius());
+                        planetData.put("radius",planet.getRadius());
+                        planetData.put("isStar",planet.isStar());
+                        planetList.put(planetData);
+                    }
+                    systemData.put("planets",planetList);
+                    systemList.put(systemData);
 
-                    // Add system to root JSON object
-                    starscapeData.put(system.getName(), systemData);
                 }
-                //now sync the constellations please
-
-
-                message.put("StarscapeData", starscapeData);
+                message.put("systems",systemList);
+                //
+                System.out.println(message.toString(4));
                 sender.sendMessage(message.toString());
+
             } catch (JSONException e) {
-                LOGGER.log(Level.ERROR, "Failed to construct JSON message: " + e.getMessage());
+                LOGGER.log(Level.ERROR, "sendStarscapeUpdate : Failed to construct JSON message: " + e.getMessage());
             }
         }
     }

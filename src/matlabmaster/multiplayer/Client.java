@@ -2,7 +2,10 @@ package matlabmaster.multiplayer;
 
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.*;
+import matlabmaster.multiplayer.requests.StarSystemSync;
+import matlabmaster.multiplayer.utils.CreateSystem;
 import matlabmaster.multiplayer.utils.RemoveStarSystem;
+import matlabmaster.multiplayer.utils.SectorCleanup;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.log4j.LogManager;
@@ -13,10 +16,7 @@ import org.json.JSONObject;
 
 import java.io.*;
 import java.net.Socket;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 
 public class Client implements MessageSender, MessageReceiver {
     private static final Logger LOGGER = LogManager.getLogger("multiplayer");
@@ -146,181 +146,15 @@ public class Client implements MessageSender, MessageReceiver {
     }
 
     public static void handleStarscapeUpdate(@NotNull JSONObject data) throws JSONException {
-        // Extract the StarscapeData from the message
-        JSONObject starscapeData = data.getJSONObject("StarscapeData");
-
         SectorAPI sector = Global.getSector();
-        List<StarSystemAPI> currentSystems = sector.getStarSystems();
-        List<String> jsonSystemIds = new ArrayList<>();
-
-        // Collect all system IDs from JSON data and their coordinates
-        Iterator<String> jsonKeys = starscapeData.keys();
-        JSONObject jsonSystemCoords = new JSONObject(); // To store system ID and its coords from JSON
-        while (jsonKeys.hasNext()) {
-            String systemName = jsonKeys.next();
-            JSONObject systemData = starscapeData.getJSONObject(systemName);
-            String systemId = systemData.getString("id");
-            jsonSystemIds.add(systemId);
-            // Store coordinates
-            float coordX = (float) systemData.getDouble("coordx");
-            float coordY = (float) systemData.getDouble("coordy");
-            jsonSystemCoords.put(systemId, new JSONObject().put("x", coordX).put("y", coordY));
-        }
-
-        // Step 1: Check and remove systems that either don't exist in JSON or have mismatched coordinates
-        Iterator<StarSystemAPI> systemIterator = currentSystems.iterator();
-        while (systemIterator.hasNext()) {
-            StarSystemAPI system = systemIterator.next();
-            String systemId = system.getId();
-            boolean shouldRemove = !jsonSystemIds.contains(systemId); // Not in JSON
-
-            if (!shouldRemove && jsonSystemIds.contains(systemId)) {
-                // System exists in both, check coordinates
-                JSONObject jsonCoords = jsonSystemCoords.getJSONObject(systemId);
-                float jsonX = (float) jsonCoords.getDouble("x");
-                float jsonY = (float) jsonCoords.getDouble("y");
-                float currentX = system.getLocation().getX();
-                float currentY = system.getLocation().getY();
-
-                // Define a small tolerance for floating-point comparison
-                float tolerance = 0.01f; // Adjust this value as needed
-
-                if (Math.abs(jsonX - currentX) > tolerance || Math.abs(jsonY - currentY) > tolerance) {
-                    shouldRemove = true; // Coordinates don't match, remove and re-add
-                    Global.getLogger(Client.class).info("Coordinates mismatch for system: " + systemId + ". Removing and re-adding.");
-                }
-            }
-
-            if (shouldRemove) {
-                RemoveStarSystem.removeStarSystem(systemId);
-                systemIterator.remove(); // Safely remove from the list
-                Global.getLogger(Client.class).info("Removed system: " + systemId);
-            }
-        }
-
-        // Step 2 & 3: Add missing systems from JSON and skip existing ones (now with correct coordinates)
-        jsonKeys = starscapeData.keys(); // Reset iterator
-        while (jsonKeys.hasNext()) {
-            String systemName = jsonKeys.next();
-            JSONObject systemData = starscapeData.getJSONObject(systemName);
-            String systemId = systemData.getString("id");
-
-            // Check if the system already exists and matches coordinates
-            boolean systemExistsAndMatches = false;
-            for (StarSystemAPI system : currentSystems) {
-                if (system.getId().equals(systemId)) {
-                    float currentX = system.getLocation().getX();
-                    float currentY = system.getLocation().getY();
-                    float jsonX = (float) systemData.getDouble("coordx");
-                    float jsonY = (float) systemData.getDouble("coordy");
-                    float tolerance = 0.01f;
-
-                    if (Math.abs(jsonX - currentX) <= tolerance && Math.abs(jsonY - currentY) <= tolerance) {
-                        systemExistsAndMatches = true;
-                        break;
-                    }
-                }
-            }
-
-            if (!systemExistsAndMatches) {
-                // Create or update system
-                StarSystemAPI newSystem = sector.getStarSystem(systemId);
-                if (newSystem == null) {
-                    newSystem = sector.createStarSystem(systemId); // Create if it doesn't exist
-                }
-
-                newSystem.setName(systemName);
-
-                // Update hyperspace coordinates
-                float coordX = (float) systemData.getDouble("coordx");
-                float coordY = (float) systemData.getDouble("coordy");
-                float centerX = (float) systemData.getDouble("centerx");
-                float centerY = (float) systemData.getDouble("centery");
-                newSystem.getLocation().set(coordX, coordY);
-
-                // Handle center type and multi-star systems
-                String centerType = systemData.getString("centerType");
-                int starCount = systemData.getInt("starCount");
-                JSONArray planetsArray = systemData.getJSONArray("planets");
-
-                // Map to store planets/stars by ID for orbit focus resolution
-                HashMap<String, SectorEntityToken> entityMap = new HashMap<>();
-
-                if ("LocationToken".equals(centerType)) {
-                    // Create an empty system center
-                    SectorEntityToken center = newSystem.addCustomEntity(null, "System Center", "stable_location", null);
-                    center.getLocation().set(centerX, centerY);
-                    newSystem.setCenter(center);
-                    entityMap.put("system_center", center); // Add to map for potential orbits
-                } else if ("CampaignPlanet".equals(centerType)) {
-                    // Handle stars and planets
-                    PlanetAPI primaryStar = null;
-
-                    // First pass: Create all stars and planets without orbits
-                    for (int i = 0; i < planetsArray.length(); i++) {
-                        JSONObject planetData = planetsArray.getJSONObject(i);
-                        String planetId = planetData.getString("id");
-                        String type = planetData.getString("type");
-                        float size = (float) planetData.getDouble("size");
-                        boolean isStar = planetData.getBoolean("isStar");
-                        float locationX = (float) planetData.getDouble("locationX");
-                        float locationY = (float) planetData.getDouble("locationY");
-
-                        if (entityMap.containsKey(planetId)) {
-                            continue; // Skip if already created
-                        }
-
-                        PlanetAPI planet;
-                        if (isStar && primaryStar == null) {
-                            // First star becomes the center
-                            planet = newSystem.initStar(planetId, type, size, 1000f); // Default radius for initStar
-                            planet.getLocation().set(locationX, locationY);
-                            primaryStar = planet;
-                        } else if (isStar) {
-                            // Additional stars added without orbit initially
-                            planet = newSystem.addPlanet(planetId, null, planetData.getString("name"), type, 0f, size, 0f, 0f);
-                            planet.getLocation().set(locationX, locationY);
-                        } else {
-                            // Non-star planets added without orbit initially
-                            planet = newSystem.addPlanet(planetId, null, planetData.getString("name"), type, 0f, size, 0f, 0f);
-                            planet.getLocation().set(locationX, locationY);
-                        }
-                        entityMap.put(planetId, planet);
-                    }
-
-                    // Second pass: Update orbits for stars and planets
-                    for (int i = 0; i < planetsArray.length(); i++) {
-                        JSONObject planetData = planetsArray.getJSONObject(i);
-                        String planetId = planetData.getString("id");
-                        String orbitFocusId = planetData.getString("orbitFocusId");
-
-                        if (!"none".equals(orbitFocusId)) {
-                            float orbitRadius = (float) planetData.getDouble("orbitRadius");
-                            float orbitAngle = (float) planetData.getDouble("orbitAngle");
-                            float orbitPeriod = (float) planetData.getDouble("orbitPeriod");
-
-                            SectorEntityToken focus = entityMap.get(orbitFocusId);
-                            PlanetAPI planet = (PlanetAPI) entityMap.get(planetId);
-
-                            if (focus != null && planet != null && planet.getOrbit() == null) {
-                                // Set orbit without recreating the entity
-                                planet.setCircularOrbit(focus, orbitAngle, orbitRadius, orbitPeriod);
-                            }
-                        }
-                    }
-
-                    if (primaryStar != null) {
-                        newSystem.setCenter(primaryStar);
-                    }
-                } else {
-                    LOGGER.log(Level.WARN, "Unknown centerType '" + centerType + "' for system: " + systemId);
-                }
-
-                Global.getLogger(Client.class).info("Added/Updated system: " + systemId + " at coordinates (" + coordX + ", " + coordY + ")");
-                Global.getLogger(Client.class).info("Center type: " + centerType + ", Star count: " + starCount);
-                currentSystems.add(newSystem); // Add back to our tracking list if newly created
-                newSystem.autogenerateHyperspaceJumpPoints();
-            }
+        List<StarSystemAPI> systemList = Global.getSector().getStarSystems();
+        JSONArray serverSideSystemList = data.getJSONArray("systems");
+        //Sector is cleaned of the additional systems , now add the server systems
+        SectorCleanup.cleanupSector(data);
+        //system creations
+        int i;
+        for (i = 0; i <= serverSideSystemList.length() - 1; i++){
+            CreateSystem.createSystem(serverSideSystemList.getJSONObject(i));
         }
     }
 }

@@ -2,8 +2,7 @@ package matlabmaster.multiplayer;
 
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.*;
-import com.fs.starfarer.campaign.BaseLocation;
-import com.fs.starfarer.campaign.CampaignPlanet;
+import com.fs.starfarer.campaign.*;
 import com.fs.starfarer.combat.entities.terrain.Planet;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -14,6 +13,7 @@ import org.json.JSONObject;
 import org.lwjgl.Sys;
 
 import java.io.*;
+import java.lang.String;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
@@ -198,7 +198,7 @@ public class Server implements MessageSender, MessageReceiver {
                 JSONArray systemList = new JSONArray();
                 //create system
                 for (StarSystemAPI system : rawSystemData){
-                    //deep space is hyperspace
+                    //deep space is gate hauler system and appears to work differently than other systems
                     if(Objects.equals(system.getId(), "deep space")){
                         continue;
                     }
@@ -260,9 +260,32 @@ public class Server implements MessageSender, MessageReceiver {
                     systemList.put(systemData);
 
                 }
+
+
+                //sync hyperspace
+                JSONArray gravityWells = new JSONArray();
+                JSONArray locationTokens = new JSONArray(); // system anchors ???? i don't know what thoses do
+                JSONArray jumpPoints = new JSONArray();
+                JSONArray customCampaignEntities = new JSONArray();//things like warning beacon
+                JSONArray campaignTerrains = new JSONArray();//slipstream
+                List<SectorEntityToken> hyperspaceEntities = sector.getHyperspace().getAllEntities();
+                for(SectorEntityToken entity : hyperspaceEntities){
+                    if(entity.getClass() == JumpPoint.class){
+                       JSONObject jumpPoint = new JSONObject();
+                       jumpPoint.put("destination", ((JumpPoint) entity).getDestinations().get(0));
+
+                    } else if (entity.getClass() == NascentGravityWellAPI.class) {
+                        
+                    } else if (entity.getClass() == BaseLocation.LocationToken.class) {
+                        
+                    } else if (entity.getClass() == CustomCampaignEntity.class) {
+                        
+                    } else if (entity.getClass() == CampaignTerrain.class) {
+
+                    }
+                }
                 message.put("systems",systemList);
-                //
-                System.out.println(message.toString(4));
+                //System.out.println(message.toString(4));
                 sender.sendMessage(message.toString());
 
             } catch (JSONException e) {

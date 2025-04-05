@@ -44,9 +44,9 @@ public class CreateSystem {
         for (int i = 0; i < planets.length(); i++) {
             createPlanet(planets.getJSONObject(i), newSystem);
         }
-
+        newSystem.autogenerateHyperspaceJumpPoints(true, true, true);
         if (!Objects.equals(data.getString("type"), "NEBULA")) {
-            newSystem.autogenerateHyperspaceJumpPoints(true, true, true);
+
         }
     }
 
@@ -56,14 +56,12 @@ public class CreateSystem {
         try {
             orbitFocus = system.getEntityById(data.getString("orbitFocusId"));
         }catch (Exception e){
-            // If no center exists (no star), create a default center point
             orbitFocus = system.addCustomEntity(null, "System Center", "stable_location", null);
             orbitFocus.setLocation(0, 0);
             system.setCenter(orbitFocus);
         }
         if (data.getBoolean("isStar")) {
             if (system.getStar() == null) {
-                // Create the primary star and set it as the center
                 system.initStar(data.getString("planetid"),
                         data.getString("type"),
                         (float) data.getDouble("radius"),
@@ -75,9 +73,8 @@ public class CreateSystem {
                 system.getStar().setName(data.getString("name"));
                 system.setCenter(system.getStar());
             } else if (system.getSecondary() == null) {
-                // Create a secondary star orbiting the center (primary star)
                 PlanetAPI planet = system.addPlanet(data.getString("planetid"),
-                        orbitFocus,  // Orbit the primary star
+                        orbitFocus,
                         data.getString("name"),
                         data.getString("type"),
                         (float) data.getDouble("orbitAngle"),
@@ -88,9 +85,8 @@ public class CreateSystem {
                 planet.setLocation((float) data.getDouble("locationx"), (float) data.getDouble("locationy"));
                 system.setSecondary(planet);
             } else if (system.getTertiary() == null) {
-                // Create a tertiary star orbiting the center (primary star)
                 PlanetAPI planet = system.addPlanet(data.getString("planetid"),
-                        orbitFocus,  // Orbit the primary star
+                        orbitFocus,  //
                         data.getString("name"),
                         data.getString("type"),
                         (float) data.getDouble("orbitAngle"),

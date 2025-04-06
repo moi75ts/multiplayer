@@ -3,9 +3,9 @@
   "name": "The multiplayer mod",
   "author": "MatlabMaster",
   "utility": false,
-  "version": { "major": '0', "minor": '0', "patch": '0' },
+  "version": { "major": '0', "minor": '1', "patch": '0' },
   "description": "MatlabMaster's multiplayer mod",
-  "gameVersion": "0.98a-RC5",
+  "gameVersion": "0.98a-RC7",
   "jars": [ "jars/multiplayer.jar" ],
   "modPlugin": "matlabmaster.multiplayer.MultiplayerModPlugin",
   "dependencies": [
@@ -13,6 +13,11 @@
        "id": "lw_lazylib",
        "name": "LazyLib",
        "version": "3.0.0"
-   }
+   },
+    {
+      "id": "lunalib",
+      "name": "LunaLib",
+      "version": "2.0.2"
+    }
   ],
 }

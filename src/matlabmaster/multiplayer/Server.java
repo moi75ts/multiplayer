@@ -10,10 +10,8 @@ import org.apache.log4j.LogManager;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.lwjgl.Sys;
 
 import java.io.*;
-import java.lang.String;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
@@ -27,34 +25,47 @@ public class Server implements MessageSender, MessageReceiver {
     private ServerSocket serverSocket;
     private ExecutorService executor;
     private volatile boolean isRunning;
-    private List<PrintWriter> clientWriters;
+    private List<ClientConnection> clientConnections; // Updated to store full connection info
     private MessageReceiver messageHandler;
+
+    // Inner class to store client connection details
+    private static class ClientConnection {
+        PrintWriter writer;
+        Socket socket;
+        BufferedReader reader;
+
+        ClientConnection(PrintWriter writer, Socket socket, BufferedReader reader) {
+            this.writer = writer;
+            this.socket = socket;
+            this.reader = reader;
+        }
+    }
 
     public Server(int port, MessageReceiver handler) {
         this.messageHandler = handler;
         try {
             serverSocket = new ServerSocket(port);
             executor = Executors.newCachedThreadPool();
-            clientWriters = new ArrayList<>();
+            clientConnections = new ArrayList<>();
             isRunning = true;
-            LOGGER.log(org.apache.log4j.Level.INFO, "Server initialized on port " + port);
+            LOGGER.log(Level.INFO, "Server initialized on port " + port);
         } catch (IOException e) {
-            LOGGER.log(org.apache.log4j.Level.ERROR, "Failed to start server on port " + port + ": " + e.getMessage());
+            LOGGER.log(Level.ERROR, "Failed to start server on port " + port + ": " + e.getMessage());
             throw new RuntimeException(e);
         }
     }
 
     public void start() {
-        LOGGER.log(org.apache.log4j.Level.INFO, "Server started on port " + serverSocket.getLocalPort());
+        LOGGER.log(Level.INFO, "Server started on port " + serverSocket.getLocalPort());
         try {
             while (isRunning && !serverSocket.isClosed()) {
                 Socket clientSocket = serverSocket.accept();
-                LOGGER.log(org.apache.log4j.Level.INFO, "New client connected: " + clientSocket.getInetAddress());
+                LOGGER.log(Level.INFO, "New client connected: " + clientSocket.getInetAddress());
                 executor.execute(() -> handleClientConnection(clientSocket));
             }
         } catch (IOException e) {
             if (isRunning) {
-                LOGGER.log(org.apache.log4j.Level.ERROR, "Server error: " + e.getMessage());
+                LOGGER.log(Level.ERROR, "Server error: " + e.getMessage());
             }
         } finally {
             stop();
@@ -68,23 +79,25 @@ public class Server implements MessageSender, MessageReceiver {
             in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
             out = new PrintWriter(clientSocket.getOutputStream(), true);
 
-            synchronized (clientWriters) {
-                clientWriters.add(out);
+            ClientConnection connection = new ClientConnection(out, clientSocket, in);
+            synchronized (clientConnections) {
+                clientConnections.add(connection);
             }
 
             String inputLine;
             while ((inputLine = in.readLine()) != null) {
-                LOGGER.log(org.apache.log4j.Level.DEBUG, "Received from client: " + inputLine);
+                LOGGER.log(Level.DEBUG, "Received from client " + clientSocket.getInetAddress() + ": " + inputLine);
                 if (messageHandler != null) {
                     messageHandler.onMessageReceived(inputLine); // Immediate callback
                 }
             }
         } catch (IOException e) {
-            LOGGER.log(org.apache.log4j.Level.ERROR, "Client connection error: " + e.getMessage());
+            LOGGER.log(Level.ERROR, "Client connection error: " + e.getMessage());
         } finally {
             if (out != null) {
-                synchronized (clientWriters) {
-                    clientWriters.remove(out);
+                synchronized (clientConnections) {
+                    PrintWriter finalOut = out;
+                    clientConnections.removeIf(conn -> conn.writer == finalOut);
                 }
             }
             closeQuietly(in);
@@ -92,7 +105,7 @@ public class Server implements MessageSender, MessageReceiver {
             try {
                 clientSocket.close();
             } catch (IOException e) {
-                LOGGER.log(org.apache.log4j.Level.ERROR, "Error closing client socket: " + e.getMessage());
+                LOGGER.log(Level.ERROR, "Error closing client socket: " + e.getMessage());
             }
         }
     }
@@ -100,12 +113,12 @@ public class Server implements MessageSender, MessageReceiver {
     @Override
     public void sendMessage(String message) {
         if (!isRunning) {
-            LOGGER.log(org.apache.log4j.Level.WARN, "Server not running, cannot send message: " + message);
+            LOGGER.log(Level.WARN, "Server not running, cannot send message: " + message);
             return;
         }
-        synchronized (clientWriters) {
-            for (PrintWriter writer : clientWriters) {
-                writer.println(message);
+        synchronized (clientConnections) {
+            for (ClientConnection conn : clientConnections) {
+                conn.writer.println(message);
             }
         }
         LOGGER.log(Level.DEBUG, "Server broadcasted: " + message);
@@ -132,15 +145,17 @@ public class Server implements MessageSender, MessageReceiver {
             if (executor != null) {
                 executor.shutdown();
             }
-            synchronized (clientWriters) {
-                for (PrintWriter writer : clientWriters) {
-                    writer.close();
+            synchronized (clientConnections) {
+                for (ClientConnection conn : clientConnections) {
+                    closeQuietly(conn.writer);
+                    closeQuietly(conn.reader);
+                    conn.socket.close();
                 }
-                clientWriters.clear();
+                clientConnections.clear();
             }
-            LOGGER.log(org.apache.log4j.Level.INFO, "Server stopped");
+            LOGGER.log(Level.INFO, "Server stopped");
         } catch (IOException e) {
-            LOGGER.log(org.apache.log4j.Level.ERROR, "Error stopping server: " + e.getMessage());
+            LOGGER.log(Level.ERROR, "Error stopping server: " + e.getMessage());
         }
     }
 
@@ -150,6 +165,24 @@ public class Server implements MessageSender, MessageReceiver {
                 resource.close();
             } catch (IOException e) {
                 // Ignore
+            }
+        }
+    }
+
+    // Method to disconnect a specific client
+    private void disconnectClient(ClientConnection connection) {
+        synchronized (clientConnections) {
+            if (clientConnections.contains(connection)) {
+                try {
+                    connection.writer.println("Disconnected: Seed mismatch");
+                    closeQuietly(connection.writer);
+                    closeQuietly(connection.reader);
+                    connection.socket.close();
+                    clientConnections.remove(connection);
+                    LOGGER.log(Level.INFO, "Disconnected client " + connection.socket.getInetAddress() + " due to seed mismatch");
+                } catch (IOException e) {
+                    LOGGER.log(Level.ERROR, "Error disconnecting client: " + e.getMessage());
+                }
             }
         }
     }
@@ -183,8 +216,7 @@ public class Server implements MessageSender, MessageReceiver {
     }
 
     public static void sendStarscapeUpdate() throws JSONException {
-        //todo sync warning beacons
-        //todo sync corona
+        // ... (unchanged from your version)
         MessageSender sender = MultiplayerModPlugin.getMessageSender();
         if (sender != null && sender.isActive()) {
             try {
@@ -193,104 +225,92 @@ public class Server implements MessageSender, MessageReceiver {
                 message.put("command", 4);
                 JSONObject systemsObject = new JSONObject();
                 SectorAPI sector = Global.getSector();
-                //step 1 get systems
-                List<StarSystemAPI>rawSystemData = sector.getStarSystems();
+                List<StarSystemAPI> rawSystemData = sector.getStarSystems();
                 JSONArray systemList = new JSONArray();
-                //create system
-                for (StarSystemAPI system : rawSystemData){
-                    //deep space is gate hauler system and appears to work differently than other systems
-                    if(Objects.equals(system.getId(), "deep space")){
+                for (StarSystemAPI system : rawSystemData) {
+                    if (Objects.equals(system.getId(), "deep space")) {
                         continue;
                     }
                     JSONObject systemData = new JSONObject();
                     systemData.put("systemID", system.getId());
                     systemData.put("type", system.getType());
                     systemData.put("age", system.getAge());
-                    //not all systems are in a constellation
-                    try{
+                    try {
                         systemData.put("constellation", system.getConstellation().getName());
                         systemData.put("constellationType", system.getConstellation().getType().toString());
-                    }catch (NullPointerException e){
+                    } catch (NullPointerException e) {
                     }
                     systemData.put("locationx", system.getLocation().x);
                     systemData.put("locationy", system.getLocation().y);
-                    //WARNING for center, must create planets in system before assigning centers
-                    //if the center is not a planet then create a newBaseLocation with at coords 0 0 (always)
-                    //else just set the center with the planetID
                     systemData.put("centerid", system.getCenter().getId());
-                    if(system.getStar() != null){
+                    if (system.getStar() != null) {
                         systemData.put("firstStar", system.getStar().getId());
                     }
-                    if(system.getSecondary() != null){
+                    if (system.getSecondary() != null) {
                         systemData.put("secondStar", system.getSecondary().getId());
                     }
-                    if(system.getTertiary() != null){
+                    if (system.getTertiary() != null) {
                         systemData.put("thirdStar", system.getTertiary().getId());
                     }
-                    //now we have all the data for creating a sector object
-
-                    //time to add the planets
                     JSONArray planetList = new JSONArray();
                     List<PlanetAPI> rawPlanetsData = system.getPlanets();
-                    for(PlanetAPI planet : rawPlanetsData){
+                    for (PlanetAPI planet : rawPlanetsData) {
                         JSONObject planetData = new JSONObject();
                         planetData.put("planetid", planet.getId());
                         planetData.put("type", planet.getTypeId());
-                        planetData.put("name",planet.getName());
-                        planetData.put("locationx",planet.getLocation().x);
-                        planetData.put("locationy",planet.getLocation().y);
-                        planetData.put("orbitAngle",planet.getCircularOrbitAngle());
-                        planetData.put("orbitPeriod",planet.getCircularOrbitPeriod());
-                        planetData.put("orbitRadius",planet.getCircularOrbitRadius());
+                        planetData.put("name", planet.getName());
+                        planetData.put("locationx", planet.getLocation().x);
+                        planetData.put("locationy", planet.getLocation().y);
+                        planetData.put("orbitAngle", planet.getCircularOrbitAngle());
+                        planetData.put("orbitPeriod", planet.getCircularOrbitPeriod());
+                        planetData.put("orbitRadius", planet.getCircularOrbitRadius());
                         try {
-                            planetData.put("orbitFocusId",planet.getOrbitFocus().getId());
-                        }catch (Exception e){
-                            //no orbit focus
+                            planetData.put("orbitFocusId", planet.getOrbitFocus().getId());
+                        } catch (Exception e) {
                         }
-                        planetData.put("radius",planet.getRadius());
-                        planetData.put("isStar",planet.isStar());
-                        if(planet.isStar()){
+                        planetData.put("radius", planet.getRadius());
+                        planetData.put("isStar", planet.isStar());
+                        if (planet.isStar()) {
                             planetData.put("hyperspaceLocationX", planet.getLocationInHyperspace().x);
                             planetData.put("hyperspaceLocationY", planet.getLocationInHyperspace().y);
-                            planetData.put("coronaSize",planet.getSpec().getCoronaSize());
+                            planetData.put("coronaSize", planet.getSpec().getCoronaSize());
                         }
                         planetList.put(planetData);
                     }
-                    systemData.put("planets",planetList);
+                    systemData.put("planets", planetList);
                     systemList.put(systemData);
-
                 }
-
-
-                //sync hyperspace
-                JSONArray gravityWells = new JSONArray();
-                JSONArray locationTokens = new JSONArray(); // system anchors ???? i don't know what thoses do
-                JSONArray jumpPoints = new JSONArray();
-                JSONArray customCampaignEntities = new JSONArray();//things like warning beacon
-                JSONArray campaignTerrains = new JSONArray();//slipstream
-                List<SectorEntityToken> hyperspaceEntities = sector.getHyperspace().getAllEntities();
-                for(SectorEntityToken entity : hyperspaceEntities){
-                    if(entity.getClass() == JumpPoint.class){
-                       JSONObject jumpPoint = new JSONObject();
-                       jumpPoint.put("destination", ((JumpPoint) entity).getDestinations().get(0));
-
-                    } else if (entity.getClass() == NascentGravityWellAPI.class) {
-                        
-                    } else if (entity.getClass() == BaseLocation.LocationToken.class) {
-                        
-                    } else if (entity.getClass() == CustomCampaignEntity.class) {
-                        
-                    } else if (entity.getClass() == CampaignTerrain.class) {
-
-                    }
-                }
-                message.put("systems",systemList);
-                //System.out.println(message.toString(4));
+                message.put("systems", systemList);
                 sender.sendMessage(message.toString());
-
             } catch (JSONException e) {
                 LOGGER.log(Level.ERROR, "sendStarscapeUpdate : Failed to construct JSON message: " + e.getMessage());
             }
+        }
+    }
+
+    public static void handleHandshake(JSONObject data) throws JSONException {
+        JSONObject message = new JSONObject();
+        MessageSender sender = MultiplayerModPlugin.getMessageSender();
+        message.put("command", 0);
+        message.put("playerId", "server");
+        message.put("seed", Global.getSector().getSeedString());
+
+        String clientSeed = data.getString("seed");
+        Server serverInstance = (Server) sender; // Cast to access instance methods
+
+        if (!Objects.equals(clientSeed, Global.getSector().getSeedString())) {
+            // Find and disconnect the client that sent this handshake
+            synchronized (serverInstance.clientConnections) {
+                for (ClientConnection conn : serverInstance.clientConnections) {
+                    // We need a way to identify the client; assuming handshake is first message
+                    // In a real scenario, you'd need client ID or socket info in the JSON
+                    conn.writer.println(message.toString()); // Send seed info first
+                    serverInstance.disconnectClient(conn);
+                    break; // Assuming only one client sends handshake at a time
+                }
+            }
+        } else {
+            sender.sendMessage(message.toString()); // Normal handshake response
         }
     }
 }

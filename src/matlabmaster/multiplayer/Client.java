@@ -36,6 +36,7 @@ public class Client implements MessageSender, MessageReceiver {
             isRunning = true;
             startListener();
             LOGGER.log(Level.INFO, "Client connected to " + serverIp + ":" + serverPort);
+            initiateHandShake();
         } catch (IOException e) {
             LOGGER.log(Level.ERROR, "Failed to connect to server " + serverIp + ":" + serverPort + ": " + e.getMessage());
             stop();
@@ -97,6 +98,20 @@ public class Client implements MessageSender, MessageReceiver {
             LOGGER.log(Level.INFO, "Client stopped");
         } catch (IOException e) {
             LOGGER.log(Level.ERROR, "Error stopping client: " + e.getMessage());
+        }
+    }
+
+    public static void initiateHandShake(){
+        MessageSender sender = MultiplayerModPlugin.getMessageSender();
+        if (sender != null && sender.isActive()) {
+            try {
+                JSONObject message = new JSONObject();
+                message.put("command",0);
+                message.put("seed", Global.getSector().getSeedString());
+                sender.sendMessage(message.toString());
+            } catch (JSONException e) {
+                throw new RuntimeException(e);
+            }
         }
     }
 

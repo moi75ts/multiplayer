@@ -1,4 +1,4 @@
-//0 reserved
+//0 Hello, seed discovery
 //1 reserved
 //2 reserved
 //3 reserved

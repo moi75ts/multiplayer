@@ -23,7 +23,7 @@ public class MultiplayerModPlugin extends BaseModPlugin {
     private static Thread serverThread;
     public static String playerId = UUID.randomUUID().toString();
     public static String mode = "server"; // Default mode
-    private static matlabmaster.multiplayer.UI.NetworkWindow networkWindow;
+    public static NetworkWindow networkWindow;
 
     @Override
     public void onApplicationLoad() throws Exception {
@@ -35,16 +35,17 @@ public class MultiplayerModPlugin extends BaseModPlugin {
 
         // Launch UI on EDT
         SwingUtilities.invokeLater(() -> {
-            networkWindow = new matlabmaster.multiplayer.UI.NetworkWindow();
+            networkWindow = new NetworkWindow();
             networkWindow.setVisible(true);
         });
     }
 
+
     @Override
     public void onGameLoad(boolean newGame) {
+        Global.getSector().addTransientScript(new MessageProcessingScript());
         Global.getSector().addTransientScript(new FastUpdateScript());
         Global.getSector().addTransientScript(new SlowUpdateScript());
-        Global.getSector().addTransientScript(new MessageProcessingScript());
         Global.getSector().addTransientScript(new SystemEntryScript());
         Global.getSector().addTransientScript(new HyperspaceEntryScript());
         Global.getSector().addTransientScript(new UnpauseScript());
@@ -73,7 +74,6 @@ public class MultiplayerModPlugin extends BaseModPlugin {
         return mode;
     }
 
-    // Methods to be called by NetworkWindow
     public static void startServer(int port) {
         try {
             if (server != null) server.stop();
@@ -94,8 +94,9 @@ public class MultiplayerModPlugin extends BaseModPlugin {
         try {
             if (client != null) client.stop();
             client = new Client(ip, port, messageHandler);
-            messageSender = client;
+            messageSender = client; // Set messageSender first
             LOGGER.log(Level.INFO, "Client connected to " + ip + ":" + port);
+            Client.initiateHandShake(messageSender); // Call handshake after setting messageSender
         } catch (Exception e) {
             LOGGER.log(Level.ERROR, "Failed to start client", e);
             throw new RuntimeException("Client start failed: " + e.getMessage());
@@ -126,4 +127,10 @@ public class MultiplayerModPlugin extends BaseModPlugin {
     public static void setMode(String newMode) {
         mode = newMode;
     }
+
+    public static NetworkWindow getNetworkWindow() {
+        return networkWindow;
+    }
+
 }
+

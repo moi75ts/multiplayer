@@ -17,7 +17,7 @@ public class NetworkWindow extends JFrame {
     public NetworkWindow() {
         setTitle("Multiplayer Network");
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        setSize(400, 300);
+        setSize(800, 600);
         setLayout(new BorderLayout(10, 10));
 
         JPanel mainPanel = new JPanel(new GridBagLayout());
@@ -25,22 +25,20 @@ public class NetworkWindow extends JFrame {
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(5, 5, 5, 5);
 
-        // IP Address field
         JLabel ipLabel = new JLabel("IP Address:Port");
         gbc.gridx = 0;
         gbc.gridy = 0;
         gbc.anchor = GridBagConstraints.WEST;
         mainPanel.add(ipLabel, gbc);
 
-        ipField = new JTextField("127.0.0.1:4444", 20); // 20 columns wide
+        ipField = new JTextField("127.0.0.1:4444", 20);
         gbc.gridx = 1;
         gbc.gridy = 0;
-        gbc.gridwidth = 2; // Span across two columns
+        gbc.gridwidth = 2;
         gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.weightx = 1.0; // Allow it to expand horizontally
+        gbc.weightx = 1.0;
         mainPanel.add(ipField, gbc);
 
-        // Buttons panel
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
         connectButton = new JButton("Connect");
         modeButton = new JButton("Mode: Server");
@@ -56,7 +54,6 @@ public class NetworkWindow extends JFrame {
         gbc.anchor = GridBagConstraints.WEST;
         mainPanel.add(buttonPanel, gbc);
 
-        // Status field
         JLabel statusLabel = new JLabel("Status");
         gbc.gridx = 0;
         gbc.gridy = 2;
@@ -72,7 +69,6 @@ public class NetworkWindow extends JFrame {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         mainPanel.add(statusField, gbc);
 
-        // Message field
         JLabel messageLabel = new JLabel("Messages");
         gbc.gridx = 0;
         gbc.gridy = 3;
@@ -94,7 +90,6 @@ public class NetworkWindow extends JFrame {
         add(mainPanel, BorderLayout.CENTER);
         setLocationRelativeTo(null);
 
-        // Button listeners
         connectButton.addActionListener(e -> toggleConnection());
         modeButton.addActionListener(e -> switchMode());
     }
@@ -121,39 +116,51 @@ public class NetworkWindow extends JFrame {
                 if (MultiplayerModPlugin.getMode().equals("server")) {
                     MultiplayerModPlugin.startServer(port);
                     messageField.append("Server started on port " + port + "\n");
+                    updateStatus(true, "Connected - server mode");
                 } else {
                     MultiplayerModPlugin.startClient(ip, port);
-                    messageField.append("Connected to " + ipPort + "\n");
+                    if (MultiplayerModPlugin.getMessageSender() != null && MultiplayerModPlugin.getMessageSender().isActive()) {
+                        messageField.append("Connected to " + ipPort + "\n");
+                        updateStatus(true, "Connected - client mode");
+                    } else {
+                        throw new Exception("Failed to connect to server");
+                    }
                 }
-                isConnected = true;
-                connectButton.setText("Disconnect");
-                statusField.setText("Connected - " + MultiplayerModPlugin.getMode() + " mode");
-                ipField.setEnabled(false);
-                modeButton.setEnabled(false);
             } catch (Exception e) {
                 messageField.append("Connection failed: " + e.getMessage() + "\n");
+                updateStatus(false, "Disconnected");
             }
         } else {
             try {
                 MultiplayerModPlugin.stopNetwork();
-                isConnected = false;
-                connectButton.setText("Connect");
-                statusField.setText("Disconnected");
+                updateStatus(false, "Disconnected");
                 messageField.append("Disconnected\n");
-                ipField.setEnabled(true);
-                modeButton.setEnabled(true);
             } catch (Exception e) {
                 messageField.append("Disconnection failed: " + e.getMessage() + "\n");
+                updateStatus(false, "Disconnected with error: " + e.getMessage());
             }
         }
     }
 
     private void switchMode() {
-        if (isConnected) return; // Can't switch while connected
+        if (isConnected) return;
         String newMode = MultiplayerModPlugin.getMode().equals("server") ? "client" : "server";
         MultiplayerModPlugin.setMode(newMode);
         modeButton.setText("Mode: " + newMode.substring(0, 1).toUpperCase() + newMode.substring(1));
         messageField.append("Switched to " + newMode + " mode\n");
         statusField.setText("Disconnected - " + newMode + " mode");
+    }
+
+    public JTextArea getMessageField() {
+        return messageField;
+    }
+
+    // New method to update connection status
+    public void updateStatus(boolean connected, String statusMessage) {
+        isConnected = connected;
+        statusField.setText(statusMessage);
+        connectButton.setText(connected ? "Disconnect" : "Connect");
+        ipField.setEnabled(!connected);
+        modeButton.setEnabled(!connected);
     }
 }

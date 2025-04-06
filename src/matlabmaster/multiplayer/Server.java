@@ -4,6 +4,7 @@ import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.*;
 import com.fs.starfarer.campaign.*;
 import com.fs.starfarer.combat.entities.terrain.Planet;
+import matlabmaster.multiplayer.commands.ServerInit;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.log4j.LogManager;
@@ -19,16 +20,18 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import org.lazywizard.console.Console;
+
+import static matlabmaster.multiplayer.MultiplayerModPlugin.networkWindow;
 
 public class Server implements MessageSender, MessageReceiver {
     private static final Logger LOGGER = LogManager.getLogger("multiplayer");
     private ServerSocket serverSocket;
     private ExecutorService executor;
     private volatile boolean isRunning;
-    private List<ClientConnection> clientConnections; // Updated to store full connection info
+    private List<ClientConnection> clientConnections;
     private MessageReceiver messageHandler;
 
-    // Inner class to store client connection details
     private static class ClientConnection {
         PrintWriter writer;
         Socket socket;
@@ -88,7 +91,7 @@ public class Server implements MessageSender, MessageReceiver {
             while ((inputLine = in.readLine()) != null) {
                 LOGGER.log(Level.DEBUG, "Received from client " + clientSocket.getInetAddress() + ": " + inputLine);
                 if (messageHandler != null) {
-                    messageHandler.onMessageReceived(inputLine); // Immediate callback
+                    messageHandler.onMessageReceived(inputLine);
                 }
             }
         } catch (IOException e) {
@@ -127,7 +130,7 @@ public class Server implements MessageSender, MessageReceiver {
     @Override
     public void onMessageReceived(String message) {
         if (messageHandler != null) {
-            messageHandler.onMessageReceived(message); // Delegate to handler
+            messageHandler.onMessageReceived(message);
         }
     }
 
@@ -169,18 +172,21 @@ public class Server implements MessageSender, MessageReceiver {
         }
     }
 
-    // Method to disconnect a specific client
-    private void disconnectClient(ClientConnection connection) {
+    private void disconnectClient(ClientConnection connection, String reason) {
         synchronized (clientConnections) {
             if (clientConnections.contains(connection)) {
                 try {
-                    connection.writer.println("Disconnected: Seed mismatch");
+                    JSONObject disconnectMsg = new JSONObject();
+                    disconnectMsg.put("command", 1); // Example command for disconnect
+                    disconnectMsg.put("reason", reason);
+                    disconnectMsg.put("playerId","server");
+                    connection.writer.println(disconnectMsg.toString());
                     closeQuietly(connection.writer);
                     closeQuietly(connection.reader);
                     connection.socket.close();
                     clientConnections.remove(connection);
-                    LOGGER.log(Level.INFO, "Disconnected client " + connection.socket.getInetAddress() + " due to seed mismatch");
-                } catch (IOException e) {
+                    LOGGER.log(Level.INFO, "Disconnected client " + connection.socket.getInetAddress() + " due to" + reason);
+                } catch (IOException | JSONException e) {
                     LOGGER.log(Level.ERROR, "Error disconnecting client: " + e.getMessage());
                 }
             }
@@ -216,7 +222,6 @@ public class Server implements MessageSender, MessageReceiver {
     }
 
     public static void sendStarscapeUpdate() throws JSONException {
-        // ... (unchanged from your version)
         MessageSender sender = MultiplayerModPlugin.getMessageSender();
         if (sender != null && sender.isActive()) {
             try {
@@ -294,23 +299,50 @@ public class Server implements MessageSender, MessageReceiver {
         message.put("command", 0);
         message.put("playerId", "server");
         message.put("seed", Global.getSector().getSeedString());
+        String clientSeed = "";
+        String clientIp = "unknown"; // Default value in case we can't determine IP
 
-        String clientSeed = data.getString("seed");
-        Server serverInstance = (Server) sender; // Cast to access instance methods
+        try {
+            clientSeed = data.getString("seed");
+        } catch (Exception e) {
+            clientSeed = "none";
+        }
+
+        Server serverInstance = (Server) sender;
+        if (serverInstance == null || !serverInstance.isActive()) {
+            LOGGER.log(Level.WARN, "Server not active, cannot handle handshake");
+            return;
+        }
+
+        // Find the client connection that sent this handshake
+        ClientConnection targetConnection = null;
+        synchronized (serverInstance.clientConnections) {
+            for (ClientConnection conn : serverInstance.clientConnections) {
+                // We assume the most recently added client sent the handshake
+                // In a real scenario, you'd need a way to match the message to the client (e.g., via playerId)
+                targetConnection = conn;
+                clientIp = conn.socket.getInetAddress().getHostAddress();
+                break; // For simplicity, assume first client is the sender
+            }
+        }
+
+        // Log client connection with IP and seed
+        if (networkWindow != null && networkWindow.getMessageField() != null) {
+            networkWindow.getMessageField().append("Client connected with IP: " + clientIp + ", with seed: " + clientSeed + "\n");
+        }
 
         if (!Objects.equals(clientSeed, Global.getSector().getSeedString())) {
-            // Find and disconnect the client that sent this handshake
-            synchronized (serverInstance.clientConnections) {
-                for (ClientConnection conn : serverInstance.clientConnections) {
-                    // We need a way to identify the client; assuming handshake is first message
-                    // In a real scenario, you'd need client ID or socket info in the JSON
-                    conn.writer.println(message.toString()); // Send seed info first
-                    serverInstance.disconnectClient(conn);
-                    break; // Assuming only one client sends handshake at a time
-                }
+            if (networkWindow != null && networkWindow.getMessageField() != null) {
+                networkWindow.getMessageField().append("Client " + clientIp + " seed mismatch, kicking\n");
+            }
+            if (targetConnection != null) {
+                serverInstance.disconnectClient(targetConnection, "seed mismatch, create new save with seed : " + Global.getSector().getSeedString() + " then reconnect");
             }
         } else {
-            sender.sendMessage(message.toString()); // Normal handshake response
+            if (networkWindow != null && networkWindow.getMessageField() != null) {
+                networkWindow.getMessageField().append("Client " + clientIp + " seed match\n");
+            }
         }
+        sender.sendMessage(message.toString());
     }
 }

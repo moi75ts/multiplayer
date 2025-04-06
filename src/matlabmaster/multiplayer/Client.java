@@ -1,10 +1,11 @@
 package matlabmaster.multiplayer;
 
 import com.fs.starfarer.api.Global;
-import com.fs.starfarer.api.campaign.*;
-import matlabmaster.multiplayer.requests.StarSystemSync;
+import com.fs.starfarer.api.campaign.SectorAPI;
+import com.fs.starfarer.api.campaign.SectorEntityToken;
+import com.fs.starfarer.api.campaign.StarSystemAPI;
+import matlabmaster.multiplayer.UI.NetworkWindow;
 import matlabmaster.multiplayer.utils.CreateSystem;
-import matlabmaster.multiplayer.utils.RemoveStarSystem;
 import matlabmaster.multiplayer.utils.SectorCleanup;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -14,9 +15,11 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import javax.swing.*;
 import java.io.*;
 import java.net.Socket;
-import java.util.*;
+import java.util.List;
+import java.util.Objects;
 
 public class Client implements MessageSender, MessageReceiver {
     private static final Logger LOGGER = LogManager.getLogger("multiplayer");
@@ -26,9 +29,11 @@ public class Client implements MessageSender, MessageReceiver {
     private volatile boolean isRunning;
     private Thread listenerThread;
     private MessageReceiver messageHandler;
+    private static NetworkWindow networkWindow;
 
     public Client(String serverIp, int serverPort, MessageReceiver handler) {
         this.messageHandler = handler;
+        this.networkWindow = MultiplayerModPlugin.getNetworkWindow();
         try {
             socket = new Socket(serverIp, serverPort);
             out = new PrintWriter(socket.getOutputStream(), true);
@@ -36,7 +41,6 @@ public class Client implements MessageSender, MessageReceiver {
             isRunning = true;
             startListener();
             LOGGER.log(Level.INFO, "Client connected to " + serverIp + ":" + serverPort);
-            initiateHandShake();
         } catch (IOException e) {
             LOGGER.log(Level.ERROR, "Failed to connect to server " + serverIp + ":" + serverPort + ": " + e.getMessage());
             stop();
@@ -50,9 +54,10 @@ public class Client implements MessageSender, MessageReceiver {
                 while (isRunning && (response = in.readLine()) != null) {
                     LOGGER.log(Level.DEBUG, "Received from server: " + response);
                     if (messageHandler != null) {
-                        messageHandler.onMessageReceived(response);
+                        messageHandler.onMessageReceived(response); // Queue the message for processing
                     }
                 }
+                LOGGER.log(Level.INFO, "Server closed connection gracefully");
             } catch (IOException e) {
                 if (isRunning) {
                     LOGGER.log(Level.ERROR, "Error reading from server: " + e.getMessage());
@@ -85,33 +90,56 @@ public class Client implements MessageSender, MessageReceiver {
 
     @Override
     public boolean isActive() {
-        return isRunning && socket != null && !socket.isClosed();
+        return isRunning && socket != null && !socket.isClosed() && socket.isConnected();
     }
 
     public void stop() {
+        if (!isRunning) return; // Prevent multiple calls to stop
         isRunning = false;
         try {
             if (in != null) in.close();
             if (out != null) out.close();
-            if (socket != null && !socket.isClosed()) socket.close();
-            if (listenerThread != null) listenerThread.interrupt();
+            if (socket != null && !socket.isClosed()) {
+                socket.close();
+            }
+            if (listenerThread != null) {
+                listenerThread.interrupt();
+                listenerThread.join(1000); // Wait up to 1 second for thread to finish
+                if (listenerThread.isAlive()) {
+                    LOGGER.log(Level.WARN, "Listener thread did not terminate cleanly");
+                }
+            }
             LOGGER.log(Level.INFO, "Client stopped");
-        } catch (IOException e) {
+            SwingUtilities.invokeLater(() -> {
+                if (networkWindow != null) {
+                    networkWindow.updateStatus(false, "Disconnected due to network issue");
+                }
+            });
+        } catch (IOException | InterruptedException e) {
             LOGGER.log(Level.ERROR, "Error stopping client: " + e.getMessage());
+            SwingUtilities.invokeLater(() -> {
+                if (networkWindow != null) {
+                    networkWindow.updateStatus(false, "Disconnected with error: " + e.getMessage());
+                }
+            });
         }
     }
 
-    public static void initiateHandShake(){
-        MessageSender sender = MultiplayerModPlugin.getMessageSender();
+    public static void initiateHandShake(MessageSender sender) {
         if (sender != null && sender.isActive()) {
             try {
                 JSONObject message = new JSONObject();
-                message.put("command",0);
+                message.put("command", 0);
+                message.put("playerId", MultiplayerModPlugin.GetPlayerId());
                 message.put("seed", Global.getSector().getSeedString());
+                networkWindow.getMessageField().append("Checking seed\n");
                 sender.sendMessage(message.toString());
             } catch (JSONException e) {
+                LOGGER.log(Level.ERROR, "Failed to initiate handshake: " + e.getMessage());
                 throw new RuntimeException(e);
             }
+        } else {
+            LOGGER.log(Level.WARN, "Cannot initiate handshake: MessageSender is null or not active");
         }
     }
 
@@ -140,7 +168,6 @@ public class Client implements MessageSender, MessageReceiver {
                 if (Global.getSector().getEntityById(id) != null) {
                     SectorEntityToken token = Global.getSector().getEntityById(id);
                     token.setCircularOrbitAngle(angle);
-                    token.getId();
                 }
             }
         } catch (Exception e) {
@@ -164,14 +191,31 @@ public class Client implements MessageSender, MessageReceiver {
 
     public static void handleStarscapeUpdate(@NotNull JSONObject data) throws JSONException {
         SectorAPI sector = Global.getSector();
-        List<StarSystemAPI> systemList = Global.getSector().getStarSystems();
         JSONArray serverSideSystemList = data.getJSONArray("systems");
-        //Sector is cleaned of the additional systems , now add the server systems
         SectorCleanup.cleanupSector(data);
-        //system creations
-        int i;
-        for (i = 0; i <= serverSideSystemList.length() - 1; i++){
+        for (int i = 0; i <= serverSideSystemList.length() - 1; i++) {
             CreateSystem.createSystem(serverSideSystemList.getJSONObject(i));
         }
+    }
+
+    public static void handleHandshake(JSONObject data) throws JSONException {
+        if (data.getString("seed") == null) {
+            networkWindow.getMessageField().append("Server has not started the game yet\n");
+        } else if (!Objects.equals(data.getString("seed"), Global.getSector().getSeedString())) {
+            networkWindow.getMessageField().append("Save seeds are different, please create a new game with following seed then attempt to reconnect: " + data.getString("seed") + "\n");
+        } else {
+            networkWindow.getMessageField().append("Seed match, continue with handshake\n");
+        }
+    }
+
+    public static void handleDisconnect(JSONObject data) throws JSONException {
+        String reason = data.getString("reason");
+        LOGGER.log(Level.INFO, "Received disconnect from server: " + reason);
+        networkWindow.getMessageField().append("Server kicked, client disconnected, reason: " + reason + "\n");
+        SwingUtilities.invokeLater(() -> {
+            if (networkWindow != null) {
+                networkWindow.updateStatus(false, "Disconnected: " + reason);
+            }
+        });
     }
 }

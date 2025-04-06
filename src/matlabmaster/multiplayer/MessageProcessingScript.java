@@ -46,6 +46,9 @@ public class MessageProcessingScript implements EveryFrameScript {
                     case 0:
                         handleHandshake(data);
                         break;
+                    case 1:
+                        handleDisconnect(data);
+                        break;
                     case 4:
                         handleStarscapeUpdate(data);
                         break;
@@ -139,10 +142,21 @@ public class MessageProcessingScript implements EveryFrameScript {
             if (Objects.equals(MultiplayerModPlugin.getMode(), "server")) {
                 Server.handleHandshake(data);
             } else {
-                //
+                Client.handleHandshake(data);
             }
         } catch (Exception e) {
-            LOGGER.log(Level.ERROR, "Error handling starscape update: " + e.getMessage());
+            LOGGER.log(Level.ERROR, "Error handling handshake " + e.getMessage());
+        }
+    }
+    private void handleDisconnect(JSONObject data){
+        try {
+            if (Objects.equals(MultiplayerModPlugin.getMode(), "server")) {
+
+            } else {
+                Client.handleDisconnect(data);
+            }
+        } catch (Exception e) {
+            LOGGER.log(Level.ERROR, "Error handling disconnect " + e.getMessage());
         }
     }
 }

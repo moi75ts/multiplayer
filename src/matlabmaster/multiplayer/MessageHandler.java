@@ -26,14 +26,20 @@ public class MessageHandler implements MessageReceiver {
             JSONObject data = new JSONObject(message);
             String senderPlayerId = data.getString("playerId");
             String reason = "";
+            String seed = "";
             if (!Objects.equals(senderPlayerId, playerId)) { // Ignore own messages
                 //reason is only used i we were kicked
                 try{
                     reason = data.getString("reason");
+                    seed = data.getString("seed");
                 }catch (Exception e){
                     reason = null;
+                    seed = null;
                 }
                 if( reason != null){
+                    if ( seed != null){
+                        networkWindow.setServerSeed(seed);
+                    }
                     networkWindow.getMessageField().append("Server kicked, client disconnected, reason: " + data.getString("reason") + "\n");
                 }else{
                     messageQueue.add(message); // Queue for processing in EveryFrameScript

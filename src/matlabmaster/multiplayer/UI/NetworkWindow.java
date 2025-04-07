@@ -4,6 +4,7 @@ import matlabmaster.multiplayer.MultiplayerModPlugin;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.datatransfer.StringSelection;
 import java.awt.event.*;
 
 public class NetworkWindow extends JFrame {
@@ -12,6 +13,8 @@ public class NetworkWindow extends JFrame {
     private JTextField statusField;
     private JTextArea messageField;
     private JButton modeButton;
+    private JTextField serverSeedField;  // New field for server seed
+    private JButton copySeedButton;      // New copy button
     private boolean isConnected = false;
 
     public NetworkWindow() {
@@ -25,6 +28,7 @@ public class NetworkWindow extends JFrame {
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(5, 5, 5, 5);
 
+        // IP Address Section
         JLabel ipLabel = new JLabel("IP Address:Port");
         gbc.gridx = 0;
         gbc.gridy = 0;
@@ -39,6 +43,31 @@ public class NetworkWindow extends JFrame {
         gbc.weightx = 1.0;
         mainPanel.add(ipField, gbc);
 
+        // Server Seed Section
+        JLabel seedLabel = new JLabel("Server Seed:");
+        gbc.gridx = 0;
+        gbc.gridy = 1;
+        gbc.gridwidth = 1;
+        gbc.fill = GridBagConstraints.NONE;
+        mainPanel.add(seedLabel, gbc);
+
+        serverSeedField = new JTextField("Not available", 20);
+        serverSeedField.setEditable(false);
+        gbc.gridx = 1;
+        gbc.gridy = 1;
+        gbc.gridwidth = 1;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        mainPanel.add(serverSeedField, gbc);
+
+        copySeedButton = new JButton("Copy");
+        copySeedButton.addActionListener(e -> copySeedToClipboard());
+        gbc.gridx = 2;
+        gbc.gridy = 1;
+        gbc.gridwidth = 1;
+        gbc.fill = GridBagConstraints.NONE;
+        mainPanel.add(copySeedButton, gbc);
+
+        // Buttons Section
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
         connectButton = new JButton("Connect");
         modeButton = new JButton("Mode: Server");
@@ -47,16 +76,17 @@ public class NetworkWindow extends JFrame {
         buttonPanel.add(modeButton);
 
         gbc.gridx = 1;
-        gbc.gridy = 1;
+        gbc.gridy = 2;
         gbc.gridwidth = 2;
         gbc.fill = GridBagConstraints.NONE;
         gbc.weightx = 0;
         gbc.anchor = GridBagConstraints.WEST;
         mainPanel.add(buttonPanel, gbc);
 
+        // Status Section
         JLabel statusLabel = new JLabel("Status");
         gbc.gridx = 0;
-        gbc.gridy = 2;
+        gbc.gridy = 3;
         gbc.gridwidth = 1;
         gbc.fill = GridBagConstraints.NONE;
         mainPanel.add(statusLabel, gbc);
@@ -64,14 +94,15 @@ public class NetworkWindow extends JFrame {
         statusField = new JTextField("Disconnected", 20);
         statusField.setEditable(false);
         gbc.gridx = 1;
-        gbc.gridy = 2;
+        gbc.gridy = 3;
         gbc.gridwidth = 2;
         gbc.fill = GridBagConstraints.HORIZONTAL;
         mainPanel.add(statusField, gbc);
 
+        // Messages Section
         JLabel messageLabel = new JLabel("Messages");
         gbc.gridx = 0;
-        gbc.gridy = 3;
+        gbc.gridy = 4;
         gbc.gridwidth = 1;
         gbc.fill = GridBagConstraints.NONE;
         mainPanel.add(messageLabel, gbc);
@@ -80,7 +111,7 @@ public class NetworkWindow extends JFrame {
         messageField.setEditable(false);
         JScrollPane scrollPane = new JScrollPane(messageField);
         gbc.gridx = 1;
-        gbc.gridy = 3;
+        gbc.gridy = 4;
         gbc.gridwidth = 2;
         gbc.fill = GridBagConstraints.BOTH;
         gbc.weightx = 1.0;
@@ -135,6 +166,7 @@ public class NetworkWindow extends JFrame {
                 MultiplayerModPlugin.stopNetwork();
                 updateStatus(false, "Disconnected");
                 messageField.append("Disconnected\n");
+                setServerSeed("Not available");  // Reset seed field when disconnected
             } catch (Exception e) {
                 messageField.append("Disconnection failed: " + e.getMessage() + "\n");
                 updateStatus(false, "Disconnected with error: " + e.getMessage());
@@ -151,16 +183,33 @@ public class NetworkWindow extends JFrame {
         statusField.setText("Disconnected - " + newMode + " mode");
     }
 
+    private void copySeedToClipboard() {
+        String seed = serverSeedField.getText();
+        if (seed != null && !seed.isEmpty() && !"Not available".equals(seed)) {
+            StringSelection stringSelection = new StringSelection(seed);
+            Toolkit.getDefaultToolkit().getSystemClipboard().setContents(stringSelection, null);
+            messageField.append("Seed copied to clipboard: " + seed + "\n");
+        } else {
+            messageField.append("No valid seed to copy\n");
+        }
+    }
+
     public JTextArea getMessageField() {
         return messageField;
     }
 
-    // New method to update connection status
     public void updateStatus(boolean connected, String statusMessage) {
         isConnected = connected;
         statusField.setText(statusMessage);
         connectButton.setText(connected ? "Disconnect" : "Connect");
         ipField.setEnabled(!connected);
         modeButton.setEnabled(!connected);
+    }
+
+    // New method to update server seed
+    public void setServerSeed(String seed) {
+        SwingUtilities.invokeLater(() -> {
+            serverSeedField.setText(seed != null ? seed : "Not available");
+        });
     }
 }

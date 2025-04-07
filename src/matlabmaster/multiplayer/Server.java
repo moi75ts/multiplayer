@@ -1,6 +1,7 @@
 package matlabmaster.multiplayer;
 
 import com.fs.starfarer.api.Global;
+import com.fs.starfarer.api.ModPlugin;
 import com.fs.starfarer.api.campaign.*;
 import com.fs.starfarer.campaign.*;
 import com.fs.starfarer.combat.entities.terrain.Planet;
@@ -22,6 +23,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import org.lazywizard.console.Console;
 
+import static com.fs.starfarer.api.Global.getSettings;
 import static matlabmaster.multiplayer.MultiplayerModPlugin.networkWindow;
 
 public class Server implements MessageSender, MessageReceiver {
@@ -36,11 +38,13 @@ public class Server implements MessageSender, MessageReceiver {
         PrintWriter writer;
         Socket socket;
         BufferedReader reader;
+        String playerId;
 
-        ClientConnection(PrintWriter writer, Socket socket, BufferedReader reader) {
+        ClientConnection(PrintWriter writer, Socket socket, BufferedReader reader, String playerId) {
             this.writer = writer;
             this.socket = socket;
             this.reader = reader;
+            this.playerId = playerId;
         }
     }
 
@@ -56,6 +60,57 @@ public class Server implements MessageSender, MessageReceiver {
             LOGGER.log(Level.ERROR, "Failed to start server on port " + port + ": " + e.getMessage());
             throw new RuntimeException(e);
         }
+    }
+
+    public void broadcastMessage(String message) {
+        sendMessage(message);
+    }
+
+    public void sendToAllExcept(String message, String excludedPlayerId) {
+        if (!isRunning) {
+            LOGGER.log(Level.WARN, "Server not running, cannot send message: " + message);
+            return;
+        }
+        synchronized (clientConnections) {
+            for (ClientConnection conn : clientConnections) {
+                if (!Objects.equals(conn.playerId, excludedPlayerId)) {
+                    conn.writer.println(message);
+                }
+            }
+        }
+        LOGGER.log(Level.DEBUG, "Server sent to all except " + excludedPlayerId + ": " + message);
+    }
+
+    public void replyTo(String message, String targetPlayerId) {
+        if (!isRunning) {
+            LOGGER.log(Level.WARN, "Server not running, cannot send message: " + message);
+            return;
+        }
+        synchronized (clientConnections) {
+            for (ClientConnection conn : clientConnections) {
+                if (Objects.equals(conn.playerId, targetPlayerId)) {
+                    conn.writer.println(message);
+                    LOGGER.log(Level.DEBUG, "Server replied to " + targetPlayerId + ": " + message);
+                    return;
+                }
+            }
+        }
+        LOGGER.log(Level.WARN, "Could not find player " + targetPlayerId + " to reply to");
+    }
+
+    public void sendToPlayers(String message, List<String> targetPlayerIds) {
+        if (!isRunning) {
+            LOGGER.log(Level.WARN, "Server not running, cannot send message: " + message);
+            return;
+        }
+        synchronized (clientConnections) {
+            for (ClientConnection conn : clientConnections) {
+                if (targetPlayerIds.contains(conn.playerId)) {
+                    conn.writer.println(message);
+                }
+            }
+        }
+        LOGGER.log(Level.DEBUG, "Server sent to players " + targetPlayerIds + ": " + message);
     }
 
     public void start() {
@@ -78,24 +133,42 @@ public class Server implements MessageSender, MessageReceiver {
     private void handleClientConnection(Socket clientSocket) {
         BufferedReader in = null;
         PrintWriter out = null;
+        String clientPlayerId = null;
+        ClientConnection connection = null;
+
         try {
             in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
             out = new PrintWriter(clientSocket.getOutputStream(), true);
 
-            ClientConnection connection = new ClientConnection(out, clientSocket, in);
+            String firstMessage = in.readLine();
+            if (firstMessage != null) {
+                JSONObject data = new JSONObject(firstMessage);
+                clientPlayerId = data.getString("playerId");
+                LOGGER.log(Level.DEBUG, "Received initial message from client " + clientSocket.getInetAddress() + ": " + firstMessage);
+                if (messageHandler != null) {
+                    messageHandler.onMessageReceived(firstMessage);
+                }
+            }
+
+            connection = new ClientConnection(out, clientSocket, in, clientPlayerId);
             synchronized (clientConnections) {
                 clientConnections.add(connection);
             }
 
             String inputLine;
             while ((inputLine = in.readLine()) != null) {
-                LOGGER.log(Level.DEBUG, "Received from client " + clientSocket.getInetAddress() + ": " + inputLine);
+                LOGGER.log(Level.DEBUG, "Received from client " + clientSocket.getInetAddress() + " (PlayerID: " + clientPlayerId + "): " + inputLine);
                 if (messageHandler != null) {
                     messageHandler.onMessageReceived(inputLine);
                 }
             }
-        } catch (IOException e) {
-            LOGGER.log(Level.ERROR, "Client connection error: " + e.getMessage());
+            LOGGER.log(Level.INFO, "Client " + clientPlayerId + " disconnected gracefully");
+            onLeave(connection);
+        } catch (IOException | JSONException e) {
+            LOGGER.log(Level.ERROR, "Client " + clientPlayerId + " connection error: " + e.getMessage());
+            if (connection != null) {
+                onLeave(connection);
+            }
         } finally {
             if (out != null) {
                 synchronized (clientConnections) {
@@ -150,6 +223,7 @@ public class Server implements MessageSender, MessageReceiver {
             }
             synchronized (clientConnections) {
                 for (ClientConnection conn : clientConnections) {
+                    onLeave(conn);  // Call onLeave for each connection during shutdown
                     closeQuietly(conn.writer);
                     closeQuietly(conn.reader);
                     conn.socket.close();
@@ -172,24 +246,57 @@ public class Server implements MessageSender, MessageReceiver {
         }
     }
 
-    private void disconnectClient(ClientConnection connection, String reason) {
+    private void disconnectClient(ClientConnection connection, String reason, String seed) {
         synchronized (clientConnections) {
-            if (clientConnections.contains(connection)) {
+            if (connection != null && clientConnections.contains(connection)) {
                 try {
                     JSONObject disconnectMsg = new JSONObject();
-                    disconnectMsg.put("command", 1); // Example command for disconnect
+                    disconnectMsg.put("command", 1);
                     disconnectMsg.put("reason", reason);
-                    disconnectMsg.put("playerId","server");
+                    disconnectMsg.put("playerId", "server");
+                    disconnectMsg.put("seed", seed);
                     connection.writer.println(disconnectMsg.toString());
                     closeQuietly(connection.writer);
                     closeQuietly(connection.reader);
                     connection.socket.close();
                     clientConnections.remove(connection);
-                    LOGGER.log(Level.INFO, "Disconnected client " + connection.socket.getInetAddress() + " due to" + reason);
+                    LOGGER.log(Level.INFO, "Disconnected client " + connection.playerId + " (" +
+                            connection.socket.getInetAddress() + ") due to " + reason);
+                    onLeave(connection);  // Call onLeave when explicitly disconnecting
                 } catch (IOException | JSONException e) {
-                    LOGGER.log(Level.ERROR, "Error disconnecting client: " + e.getMessage());
+                    LOGGER.log(Level.ERROR, "Error disconnecting client " + connection.playerId + ": " + e.getMessage());
                 }
             }
+        }
+    }
+
+    // New onLeave method
+    private void onLeave(ClientConnection connection) {
+        if (connection != null && connection.playerId != null) {
+            LOGGER.log(Level.INFO, "Player " + connection.playerId + " has left the server");
+            if (networkWindow != null && networkWindow.getMessageField() != null) {
+                networkWindow.getMessageField().append("Player " + connection.playerId + " has left\n");
+            }
+            removePlayerFleet(connection.playerId);  // Example usage: remove the fleet
+        }
+    }
+
+    private void removePlayerFleet(String playerId) {
+        if (playerId == null) return;
+
+        SectorEntityToken entity = Global.getSector().getEntityById(playerId);
+        if (entity instanceof CampaignFleetAPI) {
+            CampaignFleetAPI fleet = (CampaignFleetAPI) entity;
+            if (fleet.getContainingLocation() != null) {
+                fleet.getContainingLocation().removeEntity(fleet);
+            }
+            fleet.despawn();
+            LOGGER.log(Level.INFO, "Removed fleet for player " + playerId);
+            if (networkWindow != null && networkWindow.getMessageField() != null) {
+                networkWindow.getMessageField().append("Removed fleet for player " + playerId + "\n");
+            }
+        } else {
+            LOGGER.log(Level.WARN, "No fleet found with ID " + playerId);
         }
     }
 
@@ -228,7 +335,6 @@ public class Server implements MessageSender, MessageReceiver {
                 JSONObject message = new JSONObject();
                 message.put("playerId", "server");
                 message.put("command", 4);
-                JSONObject systemsObject = new JSONObject();
                 SectorAPI sector = Global.getSector();
                 List<StarSystemAPI> rawSystemData = sector.getStarSystems();
                 JSONArray systemList = new JSONArray();
@@ -295,54 +401,67 @@ public class Server implements MessageSender, MessageReceiver {
 
     public static void handleHandshake(JSONObject data) throws JSONException {
         JSONObject message = new JSONObject();
-        MessageSender sender = MultiplayerModPlugin.getMessageSender();
+        Server serverInstance = (Server) MultiplayerModPlugin.getMessageSender();
         message.put("command", 0);
         message.put("playerId", "server");
         message.put("seed", Global.getSector().getSeedString());
-        String clientSeed = "";
-        String clientIp = "unknown"; // Default value in case we can't determine IP
-
-        try {
-            clientSeed = data.getString("seed");
-        } catch (Exception e) {
-            clientSeed = "none";
+        String clientSeed = data.getString("seed");
+        String clientPlayerId = data.getString("playerId");
+        String clientIp = "unknown";
+        JSONArray clientModlist = data.getJSONArray("modList");
+        String clientGameVersion = data.getString("gameVersion");
+        JSONArray modList = new JSONArray();
+        for(ModPlugin mod : Global.getSettings().getModManager().getEnabledModPlugins()){
+            modList.put(mod.getClass().getName());
         }
 
-        Server serverInstance = (Server) sender;
         if (serverInstance == null || !serverInstance.isActive()) {
             LOGGER.log(Level.WARN, "Server not active, cannot handle handshake");
             return;
         }
 
-        // Find the client connection that sent this handshake
         ClientConnection targetConnection = null;
         synchronized (serverInstance.clientConnections) {
             for (ClientConnection conn : serverInstance.clientConnections) {
-                // We assume the most recently added client sent the handshake
-                // In a real scenario, you'd need a way to match the message to the client (e.g., via playerId)
-                targetConnection = conn;
-                clientIp = conn.socket.getInetAddress().getHostAddress();
-                break; // For simplicity, assume first client is the sender
+                if (Objects.equals(conn.playerId, clientPlayerId)) {
+                    targetConnection = conn;
+                    clientIp = conn.socket.getInetAddress().getHostAddress();
+                    break;
+                }
             }
         }
 
-        // Log client connection with IP and seed
+        if(clientModlist != modList){
+            serverInstance.disconnectClient(targetConnection, "mod mismatch, please install following mods then reconnect : " + modList, Global.getSector().getSeedString());
+            networkWindow.getMessageField().append("Client " + clientPlayerId + " mod mismatch, kicking\n");
+            return;
+        }
+
+        if(clientGameVersion != getSettings().getVersionString()){
+            serverInstance.disconnectClient(targetConnection, "game Version mismatch: " + getSettings().getVersionString(), getSettings().getVersionString());
+            networkWindow.getMessageField().append("Client " + clientPlayerId + " version mismatch, kicking\n");
+            return;
+        }
+
+
         if (networkWindow != null && networkWindow.getMessageField() != null) {
-            networkWindow.getMessageField().append("Client connected with IP: " + clientIp + ", with seed: " + clientSeed + "\n");
+            networkWindow.getMessageField().append("Client " + clientPlayerId + " connected with IP: " +
+                    clientIp + ", with seed: " + clientSeed + "\n");
         }
 
         if (!Objects.equals(clientSeed, Global.getSector().getSeedString())) {
             if (networkWindow != null && networkWindow.getMessageField() != null) {
-                networkWindow.getMessageField().append("Client " + clientIp + " seed mismatch, kicking\n");
+                networkWindow.getMessageField().append("Client " + clientPlayerId + " seed mismatch, kicking\n");
             }
             if (targetConnection != null) {
-                serverInstance.disconnectClient(targetConnection, "seed mismatch, create new save with seed : " + Global.getSector().getSeedString() + " then reconnect");
+                serverInstance.disconnectClient(targetConnection, "seed mismatch, create new save with seed : " +
+                        Global.getSector().getSeedString() + " then reconnect", Global.getSector().getSeedString());
             }
         } else {
             if (networkWindow != null && networkWindow.getMessageField() != null) {
-                networkWindow.getMessageField().append("Client " + clientIp + " seed match\n");
+                networkWindow.getMessageField().append("Client " + clientPlayerId + " seed match\n");
             }
+            serverInstance.replyTo(message.toString(), clientPlayerId);
         }
-        sender.sendMessage(message.toString());
     }
 }

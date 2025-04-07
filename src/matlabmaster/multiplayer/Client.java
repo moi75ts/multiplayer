@@ -1,6 +1,7 @@
 package matlabmaster.multiplayer;
 
 import com.fs.starfarer.api.Global;
+import com.fs.starfarer.api.ModPlugin;
 import com.fs.starfarer.api.campaign.SectorAPI;
 import com.fs.starfarer.api.campaign.SectorEntityToken;
 import com.fs.starfarer.api.campaign.StarSystemAPI;
@@ -20,6 +21,8 @@ import java.io.*;
 import java.net.Socket;
 import java.util.List;
 import java.util.Objects;
+
+import static com.fs.starfarer.api.Global.getSettings;
 
 public class Client implements MessageSender, MessageReceiver {
     private static final Logger LOGGER = LogManager.getLogger("multiplayer");
@@ -131,8 +134,18 @@ public class Client implements MessageSender, MessageReceiver {
                 JSONObject message = new JSONObject();
                 message.put("command", 0);
                 message.put("playerId", MultiplayerModPlugin.GetPlayerId());
-                message.put("seed", Global.getSector().getSeedString());
-                networkWindow.getMessageField().append("Checking seed\n");
+                String seed = Global.getSector().getSeedString();
+                // Put seed even if null
+                message.put("seed", seed != null ? seed : "none");
+                message.put("gameVersion", getSettings().getVersionString());
+                JSONArray modList = new JSONArray();
+                for(ModPlugin mod : Global.getSettings().getModManager().getEnabledModPlugins()){
+                    modList.put(mod.getClass().getName());
+                }
+                message.put("modList",modList);
+                networkWindow.getMessageField().append("Checking seed: " + seed + "\n");
+                LOGGER.log(Level.INFO, "Initiating handshake with seed: " + seed);
+
                 sender.sendMessage(message.toString());
             } catch (JSONException e) {
                 LOGGER.log(Level.ERROR, "Failed to initiate handshake: " + e.getMessage());
@@ -199,12 +212,16 @@ public class Client implements MessageSender, MessageReceiver {
     }
 
     public static void handleHandshake(JSONObject data) throws JSONException {
-        if (data.getString("seed") == null) {
+        String serverSeed = data.optString("seed", null);  // Use optString to handle null safely
+        if (serverSeed == null) {
             networkWindow.getMessageField().append("Server has not started the game yet\n");
-        } else if (!Objects.equals(data.getString("seed"), Global.getSector().getSeedString())) {
-            networkWindow.getMessageField().append("Save seeds are different, please create a new game with following seed then attempt to reconnect: " + data.getString("seed") + "\n");
+            networkWindow.setServerSeed("Not available");  // New method we'll add
+        } else if (!Objects.equals(serverSeed, Global.getSector().getSeedString())) {
+            networkWindow.getMessageField().append("Save seeds are different, please create a new game with following seed then attempt to reconnect: " + serverSeed + "\n");
+            networkWindow.setServerSeed(serverSeed);  // New method we'll add
         } else {
             networkWindow.getMessageField().append("Seed match, continue with handshake\n");
+            networkWindow.setServerSeed(serverSeed);  // New method we'll add
         }
     }
 

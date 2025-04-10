@@ -49,6 +49,9 @@ public class MessageProcessingScript implements EveryFrameScript {
                     case 1:
                         handleDisconnect(data);
                         break;
+                    case 2:
+                        handleMarketUpdate(data);
+                        break;
                     case 4:
                         handleStarscapeUpdate(data);
                         break;
@@ -157,6 +160,18 @@ public class MessageProcessingScript implements EveryFrameScript {
             }
         } catch (Exception e) {
             LOGGER.log(Level.ERROR, "Error handling disconnect " + e.getMessage());
+        }
+    }
+
+    private void handleMarketUpdate(JSONObject data){
+        try {
+            if (Objects.equals(MultiplayerModPlugin.getMode(), "server")) {
+                Server.handleMarketUpdateRequest(data.getString("playerId"));
+            } else {
+                Client.handleMarketUpdate(data);
+            }
+        } catch (Exception e) {
+            LOGGER.log(Level.ERROR, "Error handling marketUpdate " + e.getMessage());
         }
     }
 }

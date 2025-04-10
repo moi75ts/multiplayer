@@ -1,6 +1,6 @@
 //0 connect, seed discovery
 //1 disconnect
-//2 reserved
+//2 markets updates
 //3 reserved
 //4 Starscape update
 //5 location update

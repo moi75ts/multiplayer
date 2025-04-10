@@ -2,9 +2,17 @@ package matlabmaster.multiplayer;
 
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.ModPlugin;
-import com.fs.starfarer.api.campaign.SectorAPI;
-import com.fs.starfarer.api.campaign.SectorEntityToken;
-import com.fs.starfarer.api.campaign.StarSystemAPI;
+import com.fs.starfarer.api.campaign.*;
+import com.fs.starfarer.api.campaign.econ.EconomyAPI;
+import com.fs.starfarer.api.campaign.econ.MarketAPI;
+import com.fs.starfarer.api.campaign.econ.MarketConditionAPI;
+import com.fs.starfarer.api.impl.campaign.ids.Entities;
+import com.fs.starfarer.api.impl.campaign.ids.Submarkets;
+import com.fs.starfarer.api.impl.campaign.intel.bases.LuddicPathCellsIntel;
+import com.fs.starfarer.api.impl.campaign.intel.bases.PirateActivityIntel;
+import com.fs.starfarer.api.impl.campaign.procgen.themes.BaseThemeGenerator;
+import com.fs.starfarer.campaign.econ.Economy;
+import com.fs.starfarer.campaign.econ.Market;
 import matlabmaster.multiplayer.UI.NetworkWindow;
 import matlabmaster.multiplayer.utils.CreateSystem;
 import matlabmaster.multiplayer.utils.SectorCleanup;
@@ -15,12 +23,16 @@ import org.jetbrains.annotations.NotNull;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.lwjgl.Sys;
+import org.lwjgl.util.vector.Vector2f;
 
 import javax.swing.*;
 import java.io.*;
 import java.net.Socket;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 import static com.fs.starfarer.api.Global.getSettings;
 
@@ -139,10 +151,10 @@ public class Client implements MessageSender, MessageReceiver {
                 message.put("seed", seed != null ? seed : "none");
                 message.put("gameVersion", getSettings().getVersionString());
                 JSONArray modList = new JSONArray();
-                for(ModPlugin mod : Global.getSettings().getModManager().getEnabledModPlugins()){
+                for (ModPlugin mod : Global.getSettings().getModManager().getEnabledModPlugins()) {
                     modList.put(mod.getClass().getName());
                 }
-                message.put("modList",modList);
+                message.put("modList", modList);
                 networkWindow.getMessageField().append("Checking seed: " + seed + "\n");
                 LOGGER.log(Level.INFO, "Initiating handshake with seed: " + seed);
 
@@ -234,5 +246,117 @@ public class Client implements MessageSender, MessageReceiver {
                 networkWindow.updateStatus(false, "Disconnected: " + reason);
             }
         });
+    }
+
+    public static void requestMarketUpdate() throws JSONException {
+        //runcode matlabmaster.multiplayer.Client.requestMarketUpdate()
+        JSONObject message = new JSONObject();
+        message.put("command", 2);
+        message.put("playerId", MultiplayerModPlugin.GetPlayerId());
+        MessageSender sender = MultiplayerModPlugin.getMessageSender();
+        sender.sendMessage(message.toString());
+    }
+
+    public static void handleMarketUpdate(JSONObject data) throws JSONException {
+        EconomyAPI economy = Global.getSector().getEconomy();
+        JSONArray markets = data.getJSONArray("markets");
+        Boolean newMarket = false;
+        int i;
+        int j;
+        for (i = 0; i <= markets.length() - 1; i++) {
+            JSONObject marketObject = markets.getJSONObject(i);
+            MarketAPI market;
+            newMarket = false;
+            StarSystemAPI systemMarket = Global.getSector().getStarSystem(marketObject.getString("marketSystem"));
+            market = economy.getMarket(marketObject.getString("marketId"));
+            if (market == null) {
+                market = Global.getFactory().createMarket(marketObject.getString("marketId"),marketObject.getString("name"),marketObject.getInt("marketSize"));
+                newMarket = true;
+            }
+            if (Objects.equals(marketObject.getString("name"), "newmarket")) {
+                System.out.println(market);
+            }
+            SectorEntityToken primaryEntity = Global.getSector().getEntityById(marketObject.getString("primaryEntity"));
+            market.setName(marketObject.getString("name"));
+            market.setSize(marketObject.getInt("marketSize"));
+            market.setFactionId(marketObject.getString("ownerFactionId"));
+            market.setFreePort(marketObject.getBoolean("isFreePort"));
+            market.setHasSpaceport(marketObject.getBoolean("hasSpaceport"));
+            market.setHasWaystation(marketObject.getBoolean("hasWaystation"));
+            market.setSize(marketObject.getInt("marketSize"));
+            market.setHidden(false);
+            market.setSurveyLevel(MarketAPI.SurveyLevel.FULL);
+            market.setPlayerOwned(false);
+            market.addSubmarket(Submarkets.SUBMARKET_OPEN);
+            market.addSubmarket(Submarkets.SUBMARKET_BLACK);
+            market.getTariff().modifyFlat("default_tariff", market.getFaction().getTariffFraction());
+            System.out.println(Global.getSector().getEntityById(marketObject.getString("primaryEntity")));
+            market.setPrimaryEntity(Global.getSector().getEntityById(marketObject.getString("primaryEntity")));
+            // Get current market conditions as a Set for easier comparison
+            Set<String> currentConditions = new HashSet<>();
+            for (MarketConditionAPI condition : market.getConditions()) {
+                currentConditions.add(condition.getId());
+            }
+
+            // Get new conditions from JSONArray as a Set
+            Set<String> newConditions = new HashSet<>();
+            JSONArray conditions = marketObject.getJSONArray("conditions");
+            for (j = 0; j < conditions.length(); j++) {
+                String condition = conditions.get(j).toString();
+                newConditions.add(condition);
+            }
+
+            // Remove conditions that are in current but not in new
+            for (String conditionId : currentConditions) {
+                if (!newConditions.contains(conditionId)) {
+                    market.removeCondition(conditionId);
+                }
+            }
+
+            // Add conditions that are in new but not in current
+            for (String conditionId : newConditions) {
+                if (!currentConditions.contains(conditionId)) {
+                    market.addCondition(conditionId);
+                }
+            }
+
+            //conditions is a JSONArray of conditions id
+            JSONArray connectedEntities = marketObject.getJSONArray("connectedEntities");
+            for (j = 0; j <= connectedEntities.length() - 1; j++) {
+                JSONObject entityObject = connectedEntities.getJSONObject(j);
+                SectorEntityToken entity = Global.getSector().getEntityById(entityObject.getString("EntityID"));
+
+                    if(entity == null){
+                    BaseThemeGenerator.EntityLocation loc = new BaseThemeGenerator.EntityLocation();
+                    loc.type = BaseThemeGenerator.LocationType.STAR_ORBIT;
+                loc.orbit = Global.getFactory().createCircularOrbit(Objects.requireNonNullElse(market.getPrimaryEntity(), systemMarket.getCenter()),(float) entityObject.getDouble("orbitAngle"),(float) entityObject.getDouble("orbitRadius"),(float) entityObject.getDouble("orbitPeriod"));
+                    BaseThemeGenerator.AddedEntity added = BaseThemeGenerator.addNonSalvageEntity(systemMarket, loc, Entities.MAKESHIFT_STATION, marketObject.getString("ownerFactionId"));
+                    added.entity.setName(entityObject.getString("entityName"));
+                    added.entity.setId(entityObject.getString("EntityID"));
+                    if(market.getPrimaryEntity() == null){
+                        market.setPrimaryEntity(added.entity);
+                    }else{
+                        market.getConnectedEntities().add(added.entity);
+                    }
+                }else{
+                    market.getConnectedEntities().add(entity);
+                }
+            }
+
+
+            JSONArray industries = marketObject.getJSONArray("industries");
+            for (j = 0; j <= industries.length() - 1; j++) {
+                String industry = industries.get(j).toString();
+                market.addIndustry(industry);
+            }
+
+
+            if(market.getConnectedEntities().contains(null)){
+                market.getConnectedEntities().remove(null);
+            }
+            if (newMarket) {
+                economy.addMarket(market,false);
+            }
+        }
     }
 }

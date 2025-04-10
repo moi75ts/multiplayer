@@ -3,6 +3,11 @@ package matlabmaster.multiplayer;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.ModPlugin;
 import com.fs.starfarer.api.campaign.*;
+import com.fs.starfarer.api.campaign.econ.EconomyAPI;
+import com.fs.starfarer.api.campaign.econ.Industry;
+import com.fs.starfarer.api.campaign.econ.MarketAPI;
+import com.fs.starfarer.api.campaign.econ.MarketConditionAPI;
+import com.fs.starfarer.api.impl.campaign.ids.Industries;
 import com.fs.starfarer.campaign.*;
 import com.fs.starfarer.combat.entities.terrain.Planet;
 import matlabmaster.multiplayer.commands.ServerInit;
@@ -19,8 +24,11 @@ import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.locks.Condition;
+
 import org.lazywizard.console.Console;
 
 import static com.fs.starfarer.api.Global.getSettings;
@@ -431,17 +439,20 @@ public class Server implements MessageSender, MessageReceiver {
             }
         }
 
-        if(clientModlist != modList){
+        if(!Objects.equals(clientModlist.toString(), modList.toString())){
+            //TODO find a way to check if mod versions are identical
             serverInstance.disconnectClient(targetConnection, "mod mismatch, please install following mods then reconnect : " + modList, Global.getSector().getSeedString());
             networkWindow.getMessageField().append("Client " + clientPlayerId + " mod mismatch, kicking\n");
             return;
         }
+        networkWindow.getMessageField().append("Client " + clientPlayerId + " mod matching, continue\n");
 
-        if(clientGameVersion != getSettings().getVersionString()){
+        if(!Objects.equals(clientGameVersion, getSettings().getVersionString())){
             serverInstance.disconnectClient(targetConnection, "game Version mismatch: " + getSettings().getVersionString(), getSettings().getVersionString());
             networkWindow.getMessageField().append("Client " + clientPlayerId + " version mismatch, kicking\n");
             return;
         }
+        networkWindow.getMessageField().append("Client " + clientPlayerId + " game version identical, continue\n");
 
 
         if (networkWindow != null && networkWindow.getMessageField() != null) {
@@ -459,9 +470,82 @@ public class Server implements MessageSender, MessageReceiver {
             }
         } else {
             if (networkWindow != null && networkWindow.getMessageField() != null) {
-                networkWindow.getMessageField().append("Client " + clientPlayerId + " seed match\n");
+                networkWindow.getMessageField().append("Client " + clientPlayerId + " seed match\nClient connected");
             }
             serverInstance.replyTo(message.toString(), clientPlayerId);
         }
+    }
+
+    public static void handleMarketUpdateRequest(String playerId) throws JSONException {
+        JSONObject message = new JSONObject();
+        message.put("playerId","server");
+        message.put("command",2);
+        EconomyAPI economy = Global.getSector().getEconomy();
+        JSONArray markets = new JSONArray();
+        List<LocationAPI> systemsWithMarkets = economy.getLocationsWithMarkets();
+        for (LocationAPI systemWithMarkets : systemsWithMarkets){
+            for (MarketAPI market: economy.getMarkets(systemWithMarkets)){
+                JSONObject marketJson = new JSONObject();
+                //Stability cannot be set since it is calculated from various conditions
+                if(market.isPlayerOwned()){
+                    marketJson.put("ownerFactionId","player");
+                }else{
+                    marketJson.put("ownerFactionId",market.getFactionId());
+                }
+                marketJson.put("marketId", market.getId());
+                marketJson.put("name", market.getName());
+                marketJson.put("marketSize",market.getSize());
+                marketJson.put("isFreePort", market.isFreePort());
+                marketJson.put("hasSpaceport", market.hasSpaceport());
+                marketJson.put("hasWaystation", market.hasWaystation());
+                marketJson.put("primaryEntity",market.getPrimaryEntity().getId());
+                marketJson.put("marketSystem",market.getStarSystem().getId());
+
+                JSONArray connectedEntities = new JSONArray();
+                Set<SectorEntityToken> connectedClientEntities = market.getConnectedEntities();
+                for(SectorEntityToken entity : connectedClientEntities){
+                    JSONObject entityObject = new JSONObject();
+                    entityObject.put("EntityID",entity.getId());
+                    entityObject.put("locationx",entity.getLocation().x);
+                    entityObject.put("locationy",entity.getLocation().y);
+                    entityObject.put("entityName",entity.getName());
+                    entityObject.put("orbitAngle",entity.getCircularOrbitAngle());
+                    entityObject.put("orbitPeriod",entity.getCircularOrbitPeriod());
+                    entityObject.put("orbitRadius",entity.getCircularOrbitRadius());
+                    connectedEntities.put(entityObject);
+                }
+                marketJson.put("connectedEntities",connectedEntities);
+
+
+                JSONArray conditions = new JSONArray();
+                List<MarketConditionAPI> conditionsList = market.getConditions();
+                for(MarketConditionAPI condition : conditionsList){
+                    if(!Objects.equals(condition.getId(), "pather_cells") && !Objects.equals(condition.getId(), "pirate_activity")){                //todo fix pather cells && pirate activities
+                        conditions.put(condition.getId());                                                                                                //both pirate and pather activity require pirate / pather intel object, which seems like a pain to implement
+                    }                                                                                                                                     //so since I cannot be bothered they get removed client, side then the client readds them if needed, i you try to push these 2 conditions the client will crash
+
+                }
+                marketJson.put("conditions",conditions);
+
+                JSONArray industries = new JSONArray();
+                List<Industry> industriesList = market.getIndustries();
+                for(Industry industry : industriesList){
+                    industries.put(industry.getId());
+                }
+                marketJson.put("industries",industries);
+
+                //todo submarkets
+
+                //
+                //todo commodities
+
+                //
+                markets.put(marketJson);
+            }
+        }
+         message.put("markets",markets);
+        Server serverInstance = (Server) MultiplayerModPlugin.getMessageSender();
+        serverInstance.sendMessage(message.toString());
+        serverInstance.replyTo(message.toString(), playerId);
     }
 }

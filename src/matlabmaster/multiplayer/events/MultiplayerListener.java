@@ -8,6 +8,8 @@ import com.fs.starfarer.api.combat.EngagementResultAPI;
 import com.fs.starfarer.api.fleet.FleetMemberAPI;
 import org.lwjgl.Sys;
 
+import java.util.List;
+
 public class MultiplayerListener implements CampaignEventListener {
 
     @Override
@@ -97,8 +99,7 @@ public class MultiplayerListener implements CampaignEventListener {
 
     @Override
     public void reportPlayerDumpedCargo(CargoAPI cargo) {
-        // Your custom function to handle the dumped cargo
-        handleCargoDump(cargo);
+
     }
 
     @Override
@@ -113,13 +114,6 @@ public class MultiplayerListener implements CampaignEventListener {
 
     @Override
     public void reportEconomyMonthEnd() {
-
-    }
-
-    // Define your custom function
-    private void handleCargoDump(CargoAPI cargo) {
-
-        System.out.println("Player dumped cargo");
 
     }
 }

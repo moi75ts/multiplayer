@@ -3,10 +3,7 @@ package matlabmaster.multiplayer;
 import com.fs.starfarer.api.EveryFrameScript;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.CampaignFleetAPI;
-import com.fs.starfarer.api.campaign.LocationAPI;
-import com.fs.starfarer.api.campaign.SectorAPI;
-import com.fs.starfarer.api.fleet.FleetMemberAPI;
-import com.fs.starfarer.api.fleet.FleetMemberType;
+import com.fs.starfarer.api.characters.AbilityPlugin;
 import com.fs.starfarer.api.fleet.FleetMemberViewAPI;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -16,8 +13,7 @@ import org.json.JSONObject;
 import org.json.JSONException;
 
 import java.util.List;
-import java.util.Objects;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.Map;
 
 public class FastUpdateScript implements EveryFrameScript {
     private static final Logger LOGGER = LogManager.getLogger("multiplayer");
@@ -49,14 +45,29 @@ public class FastUpdateScript implements EveryFrameScript {
         if (sender != null && sender.isActive()) {
             try {
                 JSONObject message = new JSONObject();
+                CampaignFleetAPI fleet = Global.getSector().getPlayerFleet();
                 message.put("playerId", playerId);
                 message.put("command", 5);
                 message.put("x", Global.getSector().getPlayerFleet().getLocation().x );
                 message.put("y", Global.getSector().getPlayerFleet().getLocation().y);
                 message.put("starSystem", Global.getSector().getCurrentLocation().getName());
                 message.put("transponder", Global.getSector().getPlayerFleet().isTransponderOn());
+                message.put("moveDestinationX",fleet.getMoveDestination().x);//used for smooth movement
+                message.put("moveDestinationY",fleet.getMoveDestination().y);
 
+                //abilities ie go dark, interdiction pulse ...
+                JSONArray abilitiesObject = new JSONArray();
+                Map<String, AbilityPlugin> abilities = fleet.getAbilities();
+                for(AbilityPlugin ability : abilities.values()){
+                    JSONObject abilityObject = new JSONObject();
+                    abilityObject.put("abilityId",ability.getId());
+                    abilityObject.put("abilityActive",ability.isActive());//used for continous abilities ei, go dark, sustained burn, transponder
+                    abilityObject.put("abilityInProgress",ability.isInProgress());//used for one time then cooldown ie, emergency burn, interdiction pulse ...
+                    abilitiesObject.put(abilityObject); //both active and in progress needed because sensor burst never return true to isactive, race condition??
+                }
+                message.put("abilities",abilitiesObject);
                 JSONArray ships = new JSONArray();
+
                 List<FleetMemberViewAPI> views = Global.getSector().getPlayerFleet().getViews();
                 for (FleetMemberViewAPI view : views) {
                     JSONArray ship = new JSONArray();

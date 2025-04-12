@@ -4,6 +4,7 @@ import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.ModPlugin;
 import com.fs.starfarer.api.campaign.*;
 import com.fs.starfarer.api.campaign.econ.EconomyAPI;
+import com.fs.starfarer.api.campaign.econ.Industry;
 import com.fs.starfarer.api.campaign.econ.MarketAPI;
 import com.fs.starfarer.api.campaign.econ.MarketConditionAPI;
 import com.fs.starfarer.api.impl.campaign.ids.Entities;
@@ -11,6 +12,7 @@ import com.fs.starfarer.api.impl.campaign.ids.Submarkets;
 import com.fs.starfarer.api.impl.campaign.intel.bases.LuddicPathCellsIntel;
 import com.fs.starfarer.api.impl.campaign.intel.bases.PirateActivityIntel;
 import com.fs.starfarer.api.impl.campaign.procgen.themes.BaseThemeGenerator;
+import com.fs.starfarer.campaign.Faction;
 import com.fs.starfarer.campaign.econ.Economy;
 import com.fs.starfarer.campaign.econ.Market;
 import matlabmaster.multiplayer.UI.NetworkWindow;
@@ -34,6 +36,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+import static com.fs.starfarer.api.Global.getFactory;
 import static com.fs.starfarer.api.Global.getSettings;
 
 public class Client implements MessageSender, MessageReceiver {
@@ -215,12 +218,12 @@ public class Client implements MessageSender, MessageReceiver {
     }
 
     public static void handleStarscapeUpdate(@NotNull JSONObject data) throws JSONException {
-        SectorAPI sector = Global.getSector();
-        JSONArray serverSideSystemList = data.getJSONArray("systems");
-        SectorCleanup.cleanupSector(data);
-        for (int i = 0; i <= serverSideSystemList.length() - 1; i++) {
-            CreateSystem.createSystem(serverSideSystemList.getJSONObject(i));
-        }
+        //SectorAPI sector = Global.getSector();
+        //JSONArray serverSideSystemList = data.getJSONArray("systems");
+        //SectorCleanup.cleanupSector(data);
+        //for (int i = 0; i <= serverSideSystemList.length() - 1; i++) {
+        //    CreateSystem.createSystem(serverSideSystemList.getJSONObject(i));
+        //}
     }
 
     public static void handleHandshake(JSONObject data) throws JSONException {
@@ -273,9 +276,6 @@ public class Client implements MessageSender, MessageReceiver {
                 market = Global.getFactory().createMarket(marketObject.getString("marketId"),marketObject.getString("name"),marketObject.getInt("marketSize"));
                 newMarket = true;
             }
-            if (Objects.equals(marketObject.getString("name"), "newmarket")) {
-                System.out.println(market);
-            }
             SectorEntityToken primaryEntity = Global.getSector().getEntityById(marketObject.getString("primaryEntity"));
             market.setName(marketObject.getString("name"));
             market.setSize(marketObject.getInt("marketSize"));
@@ -284,13 +284,10 @@ public class Client implements MessageSender, MessageReceiver {
             market.setHasSpaceport(marketObject.getBoolean("hasSpaceport"));
             market.setHasWaystation(marketObject.getBoolean("hasWaystation"));
             market.setSize(marketObject.getInt("marketSize"));
-            market.setHidden(false);
             market.setSurveyLevel(MarketAPI.SurveyLevel.FULL);
             market.setPlayerOwned(false);
-            market.addSubmarket(Submarkets.SUBMARKET_OPEN);
-            market.addSubmarket(Submarkets.SUBMARKET_BLACK);
             market.getTariff().modifyFlat("default_tariff", market.getFaction().getTariffFraction());
-            System.out.println(Global.getSector().getEntityById(marketObject.getString("primaryEntity")));
+            market.setHidden(marketObject.getBoolean("isHidden"));
             market.setPrimaryEntity(Global.getSector().getEntityById(marketObject.getString("primaryEntity")));
             // Get current market conditions as a Set for easier comparison
             Set<String> currentConditions = new HashSet<>();
@@ -329,10 +326,12 @@ public class Client implements MessageSender, MessageReceiver {
                     if(entity == null){
                     BaseThemeGenerator.EntityLocation loc = new BaseThemeGenerator.EntityLocation();
                     loc.type = BaseThemeGenerator.LocationType.STAR_ORBIT;
-                loc.orbit = Global.getFactory().createCircularOrbit(Objects.requireNonNullElse(market.getPrimaryEntity(), systemMarket.getCenter()),(float) entityObject.getDouble("orbitAngle"),(float) entityObject.getDouble("orbitRadius"),(float) entityObject.getDouble("orbitPeriod"));
+                    loc.orbit = Global.getFactory().createCircularOrbit(Objects.requireNonNullElse(Global.getSector().getEntityById(entityObject.getString("entityOrbitFocusId")), systemMarket.getCenter()),(float) entityObject.getDouble("orbitAngle"),(float) entityObject.getDouble("orbitRadius"),(float) entityObject.getDouble("orbitPeriod"));
                     BaseThemeGenerator.AddedEntity added = BaseThemeGenerator.addNonSalvageEntity(systemMarket, loc, Entities.MAKESHIFT_STATION, marketObject.getString("ownerFactionId"));
                     added.entity.setName(entityObject.getString("entityName"));
                     added.entity.setId(entityObject.getString("EntityID"));
+                    added.entity.getLocation().setX((float) entityObject.getDouble("locationx"));
+                    added.entity.getLocation().setY((float) entityObject.getDouble("locationy"));
                     if(market.getPrimaryEntity() == null){
                         market.setPrimaryEntity(added.entity);
                     }else{
@@ -346,14 +345,27 @@ public class Client implements MessageSender, MessageReceiver {
 
             JSONArray industries = marketObject.getJSONArray("industries");
             for (j = 0; j <= industries.length() - 1; j++) {
-                String industry = industries.get(j).toString();
-                market.addIndustry(industry);
+                //you cannot have the same industry twice, so it dramatically simplify the code
+                JSONObject industryObject = industries.getJSONObject(j);
+                market.addIndustry(industryObject.getString("industryId"));
+                Industry industry = market.getIndustry(industryObject.getString("industryId"));
+                industry.setImproved(industryObject.getBoolean("isImproved"));
+                if(industryObject.getBoolean("isDisrupted")){
+                    industry.setDisrupted((float) industryObject.getDouble("distruptedDays"));
+                }
             }
 
 
             if(market.getConnectedEntities().contains(null)){
-                market.getConnectedEntities().remove(null);
+                market.getConnectedEntities().remove(null); // somehow sometime i get null in there so i remove them to avoid crash
             }
+            for(SectorEntityToken connectedEntity : market.getConnectedEntities()){
+                connectedEntity.setMarket(market); //add the market to the planet's surface https://www.youtube.com/watch?v=HUbEhuzHur8 <3 <3 <3
+            }
+
+            market.addSubmarket(Submarkets.SUBMARKET_OPEN);
+            market.addSubmarket(Submarkets.SUBMARKET_BLACK);
+
             if (newMarket) {
                 economy.addMarket(market,false);
             }

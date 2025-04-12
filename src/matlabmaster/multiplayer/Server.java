@@ -499,7 +499,10 @@ public class Server implements MessageSender, MessageReceiver {
                 marketJson.put("hasSpaceport", market.hasSpaceport());
                 marketJson.put("hasWaystation", market.hasWaystation());
                 marketJson.put("primaryEntity",market.getPrimaryEntity().getId());
+                marketJson.put("primaryEntityx",market.getLocation().x);
+                marketJson.put("primaryEntityy",market.getLocation().y);
                 marketJson.put("marketSystem",market.getStarSystem().getId());
+                marketJson.put("isHidden",market.isHidden());
 
                 JSONArray connectedEntities = new JSONArray();
                 Set<SectorEntityToken> connectedClientEntities = market.getConnectedEntities();
@@ -512,6 +515,7 @@ public class Server implements MessageSender, MessageReceiver {
                     entityObject.put("orbitAngle",entity.getCircularOrbitAngle());
                     entityObject.put("orbitPeriod",entity.getCircularOrbitPeriod());
                     entityObject.put("orbitRadius",entity.getCircularOrbitRadius());
+                    entityObject.put("entityOrbitFocusId", entity.getOrbit().getFocus().getId());
                     connectedEntities.put(entityObject);
                 }
                 marketJson.put("connectedEntities",connectedEntities);
@@ -530,7 +534,12 @@ public class Server implements MessageSender, MessageReceiver {
                 JSONArray industries = new JSONArray();
                 List<Industry> industriesList = market.getIndustries();
                 for(Industry industry : industriesList){
-                    industries.put(industry.getId());
+                    JSONObject industryObject = new JSONObject();
+                    industryObject.put("industryId",industry.getId());
+                    industryObject.put("isImproved",industry.isImproved());
+                    industryObject.put("isDisrupted",industry.isDisrupted());
+                    industryObject.put("distruptedDays",industry.getDisruptedDays());
+                    industries.put(industryObject);
                 }
                 marketJson.put("industries",industries);
 

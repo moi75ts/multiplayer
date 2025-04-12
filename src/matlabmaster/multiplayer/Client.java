@@ -3,10 +3,7 @@ package matlabmaster.multiplayer;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.ModPlugin;
 import com.fs.starfarer.api.campaign.*;
-import com.fs.starfarer.api.campaign.econ.EconomyAPI;
-import com.fs.starfarer.api.campaign.econ.Industry;
-import com.fs.starfarer.api.campaign.econ.MarketAPI;
-import com.fs.starfarer.api.campaign.econ.MarketConditionAPI;
+import com.fs.starfarer.api.campaign.econ.*;
 import com.fs.starfarer.api.impl.campaign.ids.Entities;
 import com.fs.starfarer.api.impl.campaign.ids.Submarkets;
 import com.fs.starfarer.api.impl.campaign.intel.bases.LuddicPathCellsIntel;
@@ -266,6 +263,7 @@ public class Client implements MessageSender, MessageReceiver {
         Boolean newMarket = false;
         int i;
         int j;
+        int k;
         for (i = 0; i <= markets.length() - 1; i++) {
             JSONObject marketObject = markets.getJSONObject(i);
             MarketAPI market;
@@ -363,8 +361,27 @@ public class Client implements MessageSender, MessageReceiver {
                 connectedEntity.setMarket(market); //add the market to the planet's surface https://www.youtube.com/watch?v=HUbEhuzHur8 <3 <3 <3
             }
 
-            market.addSubmarket(Submarkets.SUBMARKET_OPEN);
-            market.addSubmarket(Submarkets.SUBMARKET_BLACK);
+            JSONArray submarkets = marketObject.getJSONArray("subMarkets");
+            for (j = 0; j <= submarkets.length() - 1; j++) {
+                JSONObject submarket = submarkets.getJSONObject(j);
+                market.addSubmarket(submarket.getString("submarketSpecId"));
+                SubmarketAPI submarketObject = market.getSubmarket(submarket.getString("submarketSpecId"));
+                submarketObject.setFaction(Global.getSector().getFaction(submarket.getString("submarketFaction")));
+                JSONArray commodities = submarket.getJSONArray("commodities");
+                CargoAPI cargo = submarketObject.getCargo();
+                for(k=0;k < commodities.length();k++){
+                    JSONObject commodity = commodities.getJSONObject(k);
+                    if(Objects.equals(commodity.getString("type"), "RESOURCES")){
+                        float currentCommodityValue = cargo.getCommodityQuantity(commodity.getString("commodityId"));
+                        float newCommodityValue = (float) commodity.getDouble("quantity");
+                        if(currentCommodityValue < newCommodityValue){
+                            cargo.addCommodity(commodity.getString("commodityId"),newCommodityValue-currentCommodityValue);
+                        }else if(currentCommodityValue > newCommodityValue){
+                            cargo.removeCommodity(commodity.getString("commodityId"),currentCommodityValue-newCommodityValue);
+                        }
+                    }
+                }
+            }
 
             if (newMarket) {
                 economy.addMarket(market,false);

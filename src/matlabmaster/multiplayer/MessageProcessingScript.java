@@ -95,7 +95,7 @@ public class MessageProcessingScript implements EveryFrameScript {
                     for (i = 0; i < ships.length(); i++) {
                         JSONArray ship = ships.getJSONArray(i);
                         String shipName = ship.getString(0).isEmpty() ? "Unnamed Ship" : ship.getString(0);
-                        String variantId = ship.getString(1);
+                        String variantId = ship.getString(1) + "_Hull";//this is done this way (with the +_Hull) because the default ship have a weird default Hullvariant id
 
                         FleetMemberAPI member = Global.getFactory().createFleetMember(FleetMemberType.SHIP, variantId);
                         member.setShipName(shipName);

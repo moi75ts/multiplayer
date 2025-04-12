@@ -72,7 +72,7 @@ public class FastUpdateScript implements EveryFrameScript {
                 for (FleetMemberViewAPI view : views) {
                     JSONArray ship = new JSONArray();
                     ship.put(view.getMember().getShipName());
-                    ship.put(view.getMember().getVariant().getHullVariantId());
+                    ship.put(view.getMember().getHullId());
                     ships.put(ship);
                 }
                 message.put("ships", ships);

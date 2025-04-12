@@ -3,14 +3,7 @@ package matlabmaster.multiplayer;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.ModPlugin;
 import com.fs.starfarer.api.campaign.*;
-import com.fs.starfarer.api.campaign.econ.EconomyAPI;
-import com.fs.starfarer.api.campaign.econ.Industry;
-import com.fs.starfarer.api.campaign.econ.MarketAPI;
-import com.fs.starfarer.api.campaign.econ.MarketConditionAPI;
-import com.fs.starfarer.api.impl.campaign.ids.Industries;
-import com.fs.starfarer.campaign.*;
-import com.fs.starfarer.combat.entities.terrain.Planet;
-import matlabmaster.multiplayer.commands.ServerInit;
+import com.fs.starfarer.api.campaign.econ.*;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.log4j.LogManager;
@@ -543,12 +536,28 @@ public class Server implements MessageSender, MessageReceiver {
                 }
                 marketJson.put("industries",industries);
 
-                //todo submarkets
-
-                //
-                //todo commodities
-
-                //
+                JSONArray subMarkets = new JSONArray();
+                List<SubmarketAPI> submarketList = market.getSubmarketsCopy();
+                for(SubmarketAPI submarket : submarketList){
+                    if(Objects.equals(submarket.getSpecId(), "storage")){
+                        continue;
+                    }//do not sync storage
+                    JSONObject submarketObject = new JSONObject();
+                    submarketObject.put("submarketSpecId",submarket.getSpecId());
+                    submarketObject.put("submarketFaction",submarket.getFaction().getId());
+                    JSONArray commodities = new JSONArray();
+                    CargoAPI cargo = submarket.getCargo();
+                    for (CargoStackAPI cargoStack : cargo.getStacksCopy()){
+                        JSONObject cargoStackObject = new JSONObject();
+                        cargoStackObject.put("commodityId",cargoStack.getCommodityId());
+                        cargoStackObject.put("quantity",cargoStack.getSize());
+                        cargoStackObject.put("type",cargoStack.getType());
+                        commodities.put(cargoStackObject);
+                    }
+                    submarketObject.put("commodities",commodities);
+                    subMarkets.put(submarketObject);
+                }
+                marketJson.put("subMarkets",subMarkets);
                 markets.put(marketJson);
             }
         }

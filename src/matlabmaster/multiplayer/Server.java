@@ -14,10 +14,8 @@ import org.json.JSONObject;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.locks.Condition;
@@ -29,37 +27,130 @@ import static matlabmaster.multiplayer.MultiplayerModPlugin.networkWindow;
 
 public class Server implements MessageSender, MessageReceiver {
     private static final Logger LOGGER = LogManager.getLogger("multiplayer");
+    private final int port;
     private ServerSocket serverSocket;
-    private ExecutorService executor;
-    private volatile boolean isRunning;
-    private List<ClientConnection> clientConnections;
+    private final Map<String, ClientHandler> clients = new ConcurrentHashMap<>();
+    private final ExecutorService executorService = Executors.newCachedThreadPool();
+    private boolean isRunning = false;
     private MessageReceiver messageHandler;
 
-    private static class ClientConnection {
-        PrintWriter writer;
-        Socket socket;
-        BufferedReader reader;
-        String playerId;
+    public Server(int port, MessageReceiver handler) {
+        this.port = port;
+        this.messageHandler = handler;
+    }
 
-        ClientConnection(PrintWriter writer, Socket socket, BufferedReader reader, String playerId) {
-            this.writer = writer;
-            this.socket = socket;
-            this.reader = reader;
-            this.playerId = playerId;
+    public void start() {
+        try {
+            serverSocket = new ServerSocket(port);
+            isRunning = true;
+            System.out.println("Server started on port " + port);
+
+            while (isRunning) {
+                Socket clientSocket = serverSocket.accept();
+                ClientHandler clientHandler = new ClientHandler(clientSocket);
+                executorService.execute(clientHandler);
+            }
+        } catch (IOException e) {
+            if (isRunning) {
+                e.printStackTrace();
+            }
         }
     }
 
-    public Server(int port, MessageReceiver handler) {
-        this.messageHandler = handler;
+    public void stop() {
+        isRunning = false;
         try {
-            serverSocket = new ServerSocket(port);
-            executor = Executors.newCachedThreadPool();
-            clientConnections = new ArrayList<>();
-            isRunning = true;
-            LOGGER.log(Level.INFO, "Server initialized on port " + port);
+            if (serverSocket != null) {
+                serverSocket.close();
+            }
+            executorService.shutdown();
+            for (ClientHandler client : clients.values()) {
+                client.close();
+            }
         } catch (IOException e) {
-            LOGGER.log(Level.ERROR, "Failed to start server on port " + port + ": " + e.getMessage());
-            throw new RuntimeException(e);
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    public void sendMessage(String message) {
+        broadcast(message);
+    }
+
+    public void broadcast(String message) {
+        for (ClientHandler client : clients.values()) {
+            client.sendMessage(message);
+        }
+    }
+
+    public void sendTo(String userId, String message) {
+        ClientHandler client = clients.get(userId);
+        if (client != null) {
+            client.sendMessage(message);
+        }
+    }
+
+    public void sendToEveryoneBut(String userId, String message) {
+        for (Map.Entry<String, ClientHandler> entry : clients.entrySet()) {
+            if (!entry.getKey().equals(userId)) {
+                entry.getValue().sendMessage(message);
+            }
+        }
+    }
+
+    @Override
+    public boolean isActive() {
+        return isRunning;
+    }
+
+    private class ClientHandler implements Runnable {
+        private final Socket socket;
+        private final PrintWriter out;
+        private final BufferedReader in;
+        private String userId;
+
+        public ClientHandler(Socket socket) throws IOException {
+            this.socket = socket;
+            this.out = new PrintWriter(socket.getOutputStream(), true);
+            this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+        }
+
+        @Override
+        public void run() {
+            try {
+                // First message should be the user ID
+                userId = in.readLine();
+                if (userId != null) {
+                    clients.put(userId, this);
+                    System.out.println("Client connected: " + userId);
+                }
+
+                String message;
+                while ((message = in.readLine()) != null) {
+                    // Handle incoming messages
+                    messageHandler.onMessageReceived(message);
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            } finally {
+                close();
+            }
+        }
+
+        public void sendMessage(String message) {
+            out.println(message);
+        }
+
+        public void close() {
+            try {
+                if (userId != null) {
+                    clients.remove(userId);
+                    System.out.println("Client disconnected: " + userId);
+                }
+                socket.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
     }
 
@@ -72,10 +163,10 @@ public class Server implements MessageSender, MessageReceiver {
             LOGGER.log(Level.WARN, "Server not running, cannot send message: " + message);
             return;
         }
-        synchronized (clientConnections) {
-            for (ClientConnection conn : clientConnections) {
-                if (!Objects.equals(conn.playerId, excludedPlayerId)) {
-                    conn.writer.println(message);
+        synchronized (clients) {
+            for (ClientHandler conn : clients.values()) {
+                if (!Objects.equals(conn.userId, excludedPlayerId)) {
+                    conn.sendMessage(message);
                 }
             }
         }
@@ -87,10 +178,10 @@ public class Server implements MessageSender, MessageReceiver {
             LOGGER.log(Level.WARN, "Server not running, cannot send message: " + message);
             return;
         }
-        synchronized (clientConnections) {
-            for (ClientConnection conn : clientConnections) {
-                if (Objects.equals(conn.playerId, targetPlayerId)) {
-                    conn.writer.println(message);
+        synchronized (clients) {
+            for (ClientHandler conn : clients.values()) {
+                if (Objects.equals(conn.userId, targetPlayerId)) {
+                    conn.sendMessage(message);
                     LOGGER.log(Level.DEBUG, "Server replied to " + targetPlayerId + ": " + message);
                     return;
                 }
@@ -104,200 +195,20 @@ public class Server implements MessageSender, MessageReceiver {
             LOGGER.log(Level.WARN, "Server not running, cannot send message: " + message);
             return;
         }
-        synchronized (clientConnections) {
-            for (ClientConnection conn : clientConnections) {
-                if (targetPlayerIds.contains(conn.playerId)) {
-                    conn.writer.println(message);
+        synchronized (clients) {
+            for (ClientHandler conn : clients.values()) {
+                if (targetPlayerIds.contains(conn.userId)) {
+                    conn.sendMessage(message);
                 }
             }
         }
         LOGGER.log(Level.DEBUG, "Server sent to players " + targetPlayerIds + ": " + message);
     }
 
-    public void start() {
-        LOGGER.log(Level.INFO, "Server started on port " + serverSocket.getLocalPort());
-        try {
-            while (isRunning && !serverSocket.isClosed()) {
-                Socket clientSocket = serverSocket.accept();
-                LOGGER.log(Level.INFO, "New client connected: " + clientSocket.getInetAddress());
-                executor.execute(() -> handleClientConnection(clientSocket));
-            }
-        } catch (IOException e) {
-            if (isRunning) {
-                LOGGER.log(Level.ERROR, "Server error: " + e.getMessage());
-            }
-        } finally {
-            stop();
-        }
-    }
-
-    private void handleClientConnection(Socket clientSocket) {
-        BufferedReader in = null;
-        PrintWriter out = null;
-        String clientPlayerId = null;
-        ClientConnection connection = null;
-
-        try {
-            in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-            out = new PrintWriter(clientSocket.getOutputStream(), true);
-
-            String firstMessage = in.readLine();
-            if (firstMessage != null) {
-                JSONObject data = new JSONObject(firstMessage);
-                clientPlayerId = data.getString("playerId");
-                LOGGER.log(Level.DEBUG, "Received initial message from client " + clientSocket.getInetAddress() + ": " + firstMessage);
-                if (messageHandler != null) {
-                    messageHandler.onMessageReceived(firstMessage);
-                }
-            }
-
-            connection = new ClientConnection(out, clientSocket, in, clientPlayerId);
-            synchronized (clientConnections) {
-                clientConnections.add(connection);
-            }
-
-            String inputLine;
-            while ((inputLine = in.readLine()) != null) {
-                LOGGER.log(Level.DEBUG, "Received from client " + clientSocket.getInetAddress() + " (PlayerID: " + clientPlayerId + "): " + inputLine);
-                if (messageHandler != null) {
-                    messageHandler.onMessageReceived(inputLine);
-                }
-            }
-            LOGGER.log(Level.INFO, "Client " + clientPlayerId + " disconnected gracefully");
-            onLeave(connection);
-        } catch (IOException | JSONException e) {
-            LOGGER.log(Level.ERROR, "Client " + clientPlayerId + " connection error: " + e.getMessage());
-            if (connection != null) {
-                onLeave(connection);
-            }
-        } finally {
-            if (out != null) {
-                synchronized (clientConnections) {
-                    PrintWriter finalOut = out;
-                    clientConnections.removeIf(conn -> conn.writer == finalOut);
-                }
-            }
-            closeQuietly(in);
-            closeQuietly(out);
-            try {
-                clientSocket.close();
-            } catch (IOException e) {
-                LOGGER.log(Level.ERROR, "Error closing client socket: " + e.getMessage());
-            }
-        }
-    }
-
-    @Override
-    public void sendMessage(String message) {
-        if (!isRunning) {
-            LOGGER.log(Level.WARN, "Server not running, cannot send message: " + message);
-            return;
-        }
-        synchronized (clientConnections) {
-            for (ClientConnection conn : clientConnections) {
-                conn.writer.println(message);
-            }
-        }
-        LOGGER.log(Level.DEBUG, "Server broadcasted: " + message);
-    }
-
     @Override
     public void onMessageReceived(String message) {
         if (messageHandler != null) {
             messageHandler.onMessageReceived(message);
-        }
-    }
-
-    @Override
-    public boolean isActive() {
-        return isRunning && !serverSocket.isClosed();
-    }
-
-    public void stop() {
-        isRunning = false;
-        try {
-            if (serverSocket != null && !serverSocket.isClosed()) {
-                serverSocket.close();
-            }
-            if (executor != null) {
-                executor.shutdown();
-            }
-            synchronized (clientConnections) {
-                for (ClientConnection conn : clientConnections) {
-                    onLeave(conn);  // Call onLeave for each connection during shutdown
-                    closeQuietly(conn.writer);
-                    closeQuietly(conn.reader);
-                    conn.socket.close();
-                }
-                clientConnections.clear();
-            }
-            LOGGER.log(Level.INFO, "Server stopped");
-        } catch (IOException e) {
-            LOGGER.log(Level.ERROR, "Error stopping server: " + e.getMessage());
-        }
-    }
-
-    private void closeQuietly(Closeable resource) {
-        if (resource != null) {
-            try {
-                resource.close();
-            } catch (IOException e) {
-                // Ignore
-            }
-        }
-    }
-
-    private void disconnectClient(ClientConnection connection, String reason, String seed) {
-        synchronized (clientConnections) {
-            if (connection != null && clientConnections.contains(connection)) {
-                try {
-                    JSONObject disconnectMsg = new JSONObject();
-                    disconnectMsg.put("command", 1);
-                    disconnectMsg.put("reason", reason);
-                    disconnectMsg.put("playerId", "server");
-                    disconnectMsg.put("seed", seed);
-                    connection.writer.println(disconnectMsg.toString());
-                    closeQuietly(connection.writer);
-                    closeQuietly(connection.reader);
-                    connection.socket.close();
-                    clientConnections.remove(connection);
-                    LOGGER.log(Level.INFO, "Disconnected client " + connection.playerId + " (" +
-                            connection.socket.getInetAddress() + ") due to " + reason);
-                    onLeave(connection);  // Call onLeave when explicitly disconnecting
-                } catch (IOException | JSONException e) {
-                    LOGGER.log(Level.ERROR, "Error disconnecting client " + connection.playerId + ": " + e.getMessage());
-                }
-            }
-        }
-    }
-
-    // New onLeave method
-    private void onLeave(ClientConnection connection) {
-        if (connection != null && connection.playerId != null) {
-            LOGGER.log(Level.INFO, "Player " + connection.playerId + " has left the server");
-            if (networkWindow != null && networkWindow.getMessageField() != null) {
-                networkWindow.getMessageField().append("Player " + connection.playerId + " has left\n");
-            }
-            removePlayerFleet(connection.playerId);  // Example usage: remove the fleet
-        }
-    }
-
-    private void removePlayerFleet(String playerId) {
-        if (playerId == null) return;
-
-        SectorEntityToken entity = Global.getSector().getEntityById(playerId);
-        if (entity instanceof CampaignFleetAPI) {
-            CampaignFleetAPI fleet = (CampaignFleetAPI) entity;
-            if (fleet.getContainingLocation() != null) {
-                fleet.getContainingLocation().removeEntity(fleet);
-            }
-            fleet.despawn();
-            LOGGER.log(Level.INFO, "Removed fleet for player " + playerId);
-            if (networkWindow != null && networkWindow.getMessageField() != null) {
-                networkWindow.getMessageField().append("Removed fleet for player " + playerId + "\n");
-            }
-        } else {
-            LOGGER.log(Level.WARN, "No fleet found with ID " + playerId);
         }
     }
 
@@ -421,32 +332,30 @@ public class Server implements MessageSender, MessageReceiver {
             return;
         }
 
-        ClientConnection targetConnection = null;
-        synchronized (serverInstance.clientConnections) {
-            for (ClientConnection conn : serverInstance.clientConnections) {
-                if (Objects.equals(conn.playerId, clientPlayerId)) {
-                    targetConnection = conn;
-                    clientIp = conn.socket.getInetAddress().getHostAddress();
-                    break;
-                }
-            }
+        // Get the client handler directly from the clients map
+        ClientHandler targetConnection = serverInstance.clients.get(clientPlayerId);
+        if (targetConnection != null) {
+            clientIp = targetConnection.socket.getInetAddress().getHostAddress();
         }
 
         if(!Objects.equals(clientModlist.toString(), modList.toString())){
             //TODO find a way to check if mod versions are identical
-            serverInstance.disconnectClient(targetConnection, "mod mismatch, please install following mods then reconnect : " + modList, Global.getSector().getSeedString());
+            if (targetConnection != null) {
+                serverInstance.disconnectClient(targetConnection, "mod mismatch, please install following mods then reconnect : " + modList, Global.getSector().getSeedString());
+            }
             networkWindow.getMessageField().append("Client " + clientPlayerId + " mod mismatch, kicking\n");
             return;
         }
         networkWindow.getMessageField().append("Client " + clientPlayerId + " mod matching, continue\n");
 
         if(!Objects.equals(clientGameVersion, getSettings().getVersionString())){
-            serverInstance.disconnectClient(targetConnection, "game Version mismatch: " + getSettings().getVersionString(), getSettings().getVersionString());
+            if (targetConnection != null) {
+                serverInstance.disconnectClient(targetConnection, "game Version mismatch: " + getSettings().getVersionString(), getSettings().getVersionString());
+            }
             networkWindow.getMessageField().append("Client " + clientPlayerId + " version mismatch, kicking\n");
             return;
         }
         networkWindow.getMessageField().append("Client " + clientPlayerId + " game version identical, continue\n");
-
 
         if (networkWindow != null && networkWindow.getMessageField() != null) {
             networkWindow.getMessageField().append("Client " + clientPlayerId + " connected with IP: " +
@@ -565,5 +474,56 @@ public class Server implements MessageSender, MessageReceiver {
         Server serverInstance = (Server) MultiplayerModPlugin.getMessageSender();
         serverInstance.sendMessage(message.toString());
         serverInstance.replyTo(message.toString(), playerId);
+    }
+
+    private void disconnectClient(ClientHandler connection, String reason, String seed) {
+        synchronized (clients) {
+            if (connection != null && clients.containsValue(connection)) {
+                try {
+                    JSONObject disconnectMsg = new JSONObject();
+                    disconnectMsg.put("command", 1);
+                    disconnectMsg.put("reason", reason);
+                    disconnectMsg.put("playerId", "server");
+                    disconnectMsg.put("seed", seed);
+                    connection.sendMessage(disconnectMsg.toString());
+                    connection.close();
+                    LOGGER.log(Level.INFO, "Disconnected client " + connection.userId + " (" +
+                            connection.socket.getInetAddress() + ") due to " + reason);
+                    onLeave(connection);  // Call onLeave when explicitly disconnecting
+                } catch (JSONException e) {
+                    LOGGER.log(Level.ERROR, "Error disconnecting client " + connection.userId + ": " + e.getMessage());
+                }
+            }
+        }
+    }
+
+    // New onLeave method
+    private void onLeave(ClientHandler connection) {
+        if (connection != null && connection.userId != null) {
+            LOGGER.log(Level.INFO, "Player " + connection.userId + " has left the server");
+            if (networkWindow != null && networkWindow.getMessageField() != null) {
+                networkWindow.getMessageField().append("Player " + connection.userId + " has left\n");
+            }
+            removePlayerFleet(connection.userId);  // Example usage: remove the fleet
+        }
+    }
+
+    private void removePlayerFleet(String playerId) {
+        if (playerId == null) return;
+
+        SectorEntityToken entity = Global.getSector().getEntityById(playerId);
+        if (entity instanceof CampaignFleetAPI) {
+            CampaignFleetAPI fleet = (CampaignFleetAPI) entity;
+            if (fleet.getContainingLocation() != null) {
+                fleet.getContainingLocation().removeEntity(fleet);
+            }
+            fleet.despawn();
+            LOGGER.log(Level.INFO, "Removed fleet for player " + playerId);
+            if (networkWindow != null && networkWindow.getMessageField() != null) {
+                networkWindow.getMessageField().append("Removed fleet for player " + playerId + "\n");
+            }
+        } else {
+            LOGGER.log(Level.WARN, "No fleet found with ID " + playerId);
+        }
     }
 }

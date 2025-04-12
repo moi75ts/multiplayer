@@ -18,7 +18,6 @@ public class MultiplayerModPlugin extends BaseModPlugin {
     private static MessageSender messageSender;
     private static MessageHandler messageHandler;
     private static Thread serverThread;
-    public static String playerId = UUID.randomUUID().toString();
     public static String mode = "server"; // Default mode
     public static NetworkWindow networkWindow;
 
@@ -26,9 +25,9 @@ public class MultiplayerModPlugin extends BaseModPlugin {
     public void onApplicationLoad() throws Exception {
         super.onApplicationLoad();
         LOGGER.log(Level.INFO, "Multiplayer mod is alive");
-        LOGGER.log(Level.INFO, "Player id is " + playerId);
+        LOGGER.log(Level.INFO, "Player id is " + User.getUserId());
 
-        messageHandler = new MessageHandler(playerId);
+        messageHandler = new MessageHandler(User.getUserId());
 
         // Launch UI on EDT
         SwingUtilities.invokeLater(() -> {
@@ -57,10 +56,6 @@ public class MultiplayerModPlugin extends BaseModPlugin {
 
     public static MessageSender getMessageSender() {
         return messageSender;
-    }
-
-    public static String GetPlayerId() {
-        return playerId;
     }
 
     public void onApplicationShutdown() {
@@ -92,7 +87,8 @@ public class MultiplayerModPlugin extends BaseModPlugin {
         try {
             if (client != null) client.stop();
             client = new Client(ip, port, messageHandler);
-            messageSender = client; // Set messageSender first
+            client.connect(); // Connect first
+            messageSender = client; // Set messageSender after connection is established
             LOGGER.log(Level.INFO, "Client connected to " + ip + ":" + port);
             Client.initiateHandShake(messageSender); // Call handshake after setting messageSender
         } catch (Exception e) {

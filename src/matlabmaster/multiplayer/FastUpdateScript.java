@@ -19,7 +19,7 @@ public class FastUpdateScript implements EveryFrameScript {
     private static final Logger LOGGER = LogManager.getLogger("multiplayer");
     private static final float INTERVAL = 0.05f; // ~20 TPS (0.05 seconds)
     private float timer = 0f;
-    private final String playerId = MultiplayerModPlugin.GetPlayerId();
+    private final String playerId = User.getUserId();
 
     @Override
     public boolean isDone() {

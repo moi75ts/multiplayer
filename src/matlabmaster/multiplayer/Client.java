@@ -32,68 +32,73 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.*;
 
 import static com.fs.starfarer.api.Global.getFactory;
 import static com.fs.starfarer.api.Global.getSettings;
 
 public class Client implements MessageSender, MessageReceiver {
     private static final Logger LOGGER = LogManager.getLogger("multiplayer");
+    private final String serverIp;
+    private final int serverPort;
     private Socket socket;
     private PrintWriter out;
     private BufferedReader in;
-    private volatile boolean isRunning;
-    private Thread listenerThread;
+    private final User user;
+    private final ExecutorService executorService = Executors.newSingleThreadExecutor();
+    private boolean isConnected = false;
     private MessageReceiver messageHandler;
     private static NetworkWindow networkWindow;
 
-    public Client(String serverIp, int serverPort, MessageReceiver handler) {
-        this.messageHandler = handler;
+    public Client(String serverIp, int serverPort, MessageReceiver messageHandler) {
+        this.serverIp = serverIp;
+        this.serverPort = serverPort;
+        this.user = new User();
+        this.messageHandler = messageHandler;
         this.networkWindow = MultiplayerModPlugin.getNetworkWindow();
+    }
+
+    public void connect() {
         try {
             socket = new Socket(serverIp, serverPort);
             out = new PrintWriter(socket.getOutputStream(), true);
             in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            isRunning = true;
-            startListener();
-            LOGGER.log(Level.INFO, "Client connected to " + serverIp + ":" + serverPort);
+            
+            // Send user ID as first message
+            out.println(user.getUserId());
+            isConnected = true;
+            
+            // Start listening for messages
+            executorService.execute(this::listenForMessages);
+            System.out.println("Connected to server at " + serverIp + ":" + serverPort);
         } catch (IOException e) {
-            LOGGER.log(Level.ERROR, "Failed to connect to server " + serverIp + ":" + serverPort + ": " + e.getMessage());
-            stop();
+            e.printStackTrace();
+            close();
         }
     }
 
-    private void startListener() {
-        listenerThread = new Thread(() -> {
-            try {
-                String response;
-                while (isRunning && (response = in.readLine()) != null) {
-                    LOGGER.log(Level.DEBUG, "Received from server: " + response);
-                    if (messageHandler != null) {
-                        messageHandler.onMessageReceived(response); // Queue the message for processing
-                    }
+    private void listenForMessages() {
+        try {
+            String message;
+            while (isConnected && (message = in.readLine()) != null) {
+                if (messageHandler != null) {
+                    messageHandler.onMessageReceived(message);
                 }
-                LOGGER.log(Level.INFO, "Server closed connection gracefully");
-            } catch (IOException e) {
-                if (isRunning) {
-                    LOGGER.log(Level.ERROR, "Error reading from server: " + e.getMessage());
-                }
-            } finally {
-                stop();
             }
-        });
-        listenerThread.setDaemon(true);
-        listenerThread.setName("ClientListener");
-        listenerThread.start();
+        } catch (IOException e) {
+            if (isConnected) {
+                e.printStackTrace();
+            }
+        } finally {
+            close();
+        }
     }
 
     @Override
     public void sendMessage(String message) {
-        if (!isRunning || out == null) {
-            LOGGER.log(Level.WARN, "Client not connected, cannot send message: " + message);
-            return;
+        if (isConnected) {
+            out.println(message);
         }
-        out.println(message);
-        LOGGER.log(Level.DEBUG, "Client sent: " + message);
     }
 
     @Override
@@ -103,41 +108,29 @@ public class Client implements MessageSender, MessageReceiver {
         }
     }
 
-    @Override
-    public boolean isActive() {
-        return isRunning && socket != null && !socket.isClosed() && socket.isConnected();
+    public void close() {
+        isConnected = false;
+        try {
+            if (out != null) out.close();
+            if (in != null) in.close();
+            if (socket != null) socket.close();
+            executorService.shutdown();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     public void stop() {
-        if (!isRunning) return; // Prevent multiple calls to stop
-        isRunning = false;
-        try {
-            if (in != null) in.close();
-            if (out != null) out.close();
-            if (socket != null && !socket.isClosed()) {
-                socket.close();
-            }
-            if (listenerThread != null) {
-                listenerThread.interrupt();
-                listenerThread.join(1000); // Wait up to 1 second for thread to finish
-                if (listenerThread.isAlive()) {
-                    LOGGER.log(Level.WARN, "Listener thread did not terminate cleanly");
-                }
-            }
-            LOGGER.log(Level.INFO, "Client stopped");
-            SwingUtilities.invokeLater(() -> {
-                if (networkWindow != null) {
-                    networkWindow.updateStatus(false, "Disconnected due to network issue");
-                }
-            });
-        } catch (IOException | InterruptedException e) {
-            LOGGER.log(Level.ERROR, "Error stopping client: " + e.getMessage());
-            SwingUtilities.invokeLater(() -> {
-                if (networkWindow != null) {
-                    networkWindow.updateStatus(false, "Disconnected with error: " + e.getMessage());
-                }
-            });
-        }
+        close();
+    }
+
+    @Override
+    public boolean isActive() {
+        return isConnected;
+    }
+
+    public String getUserId() {
+        return user.getUserId();
     }
 
     public static void initiateHandShake(MessageSender sender) {
@@ -145,7 +138,7 @@ public class Client implements MessageSender, MessageReceiver {
             try {
                 JSONObject message = new JSONObject();
                 message.put("command", 0);
-                message.put("playerId", MultiplayerModPlugin.GetPlayerId());
+                message.put("playerId", User.getUserId());
                 String seed = Global.getSector().getSeedString();
                 // Put seed even if null
                 message.put("seed", seed != null ? seed : "none");
@@ -174,7 +167,7 @@ public class Client implements MessageSender, MessageReceiver {
             try {
                 JSONObject message = new JSONObject();
                 message.put("command", 6);
-                message.put("playerId", MultiplayerModPlugin.GetPlayerId());
+                message.put("playerId", User.getUserId());
                 message.put("system", currentLocation);
                 sender.sendMessage(message.toString());
             } catch (JSONException e) {
@@ -206,7 +199,7 @@ public class Client implements MessageSender, MessageReceiver {
             try {
                 JSONObject message = new JSONObject();
                 message.put("command", 4);
-                message.put("playerId", MultiplayerModPlugin.GetPlayerId());
+                message.put("playerId", User.getUserId());
                 sender.sendMessage(message.toString());
             } catch (JSONException e) {
                 LOGGER.log(Level.ERROR, "Failed to construct JSON message: " + e.getMessage());
@@ -252,7 +245,7 @@ public class Client implements MessageSender, MessageReceiver {
         //runcode matlabmaster.multiplayer.Client.requestMarketUpdate()
         JSONObject message = new JSONObject();
         message.put("command", 2);
-        message.put("playerId", MultiplayerModPlugin.GetPlayerId());
+        message.put("playerId", User.getUserId());
         MessageSender sender = MultiplayerModPlugin.getMessageSender();
         sender.sendMessage(message.toString());
     }

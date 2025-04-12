@@ -144,3 +144,101 @@ Lowtech Tempest: Selkie
 [LazyLib]: https://github.com/LazyWizard/lazylib/
 [LunaLib]: https://github.com/Lukas22041/LunaLib/
 [Nexelerin]: https://github.com/Histidine91/Nexerelin/
+
+# StarSector Multiplayer Mod
+
+## Client/Server Implementation
+
+This mod implements a simple client/server architecture for StarSector multiplayer functionality.
+
+### User Identification
+
+Each player is assigned a unique, persistent user ID that is stored locally in a `user_id.dat` file. This ID remains constant across game sessions and is used to identify players in the multiplayer environment.
+
+### Server Features
+
+The server provides the following functionality:
+
+1. **Connection Management**
+   - Accepts client connections
+   - Maintains a list of connected clients
+   - Handles client disconnections
+
+2. **Message Broadcasting**
+   - `broadcast(message)`: Sends a message to all connected clients
+   - `sendTo(userId, message)`: Sends a message to a specific client
+   - `sendToEveryoneBut(userId, message)`: Sends a message to all clients except the specified one
+
+### Client Features
+
+The client provides:
+
+1. **Connection**
+   - Automatically connects to the server
+   - Sends its user ID upon connection
+   - Maintains a persistent connection
+
+2. **Message Handling**
+   - Sends messages to the server
+   - Receives messages from the server
+   - Processes incoming messages through a message handler
+
+### Usage
+
+#### Server Setup
+```java
+Server server = new Server(port);
+server.start();
+```
+
+#### Client Setup
+```java
+Client client = new Client(serverIp, serverPort, messageHandler);
+client.connect();
+```
+
+#### Sending Messages
+```java
+// From client to server
+client.sendMessage("Hello server!");
+
+// From server to clients
+server.broadcast("Hello everyone!");
+server.sendTo("user123", "Private message");
+server.sendToEveryoneBut("user123", "Message for everyone else");
+```
+
+### Configuration
+
+The mod can be configured through the `settings.json` file:
+
+```json
+{
+    "gameSettings": {
+        "mode": "client"
+    },
+    "clientSettings": {
+        "serverIp": "127.0.0.1",
+        "serverPort": 4444
+    },
+    "serverSettings": {
+        "port": 4444
+    }
+}
+```
+
+### Error Handling
+
+The implementation includes basic error handling for:
+- Connection failures
+- Message sending/receiving errors
+- Client disconnections
+- Server shutdown
+
+### Security
+
+The current implementation uses a simple user ID system. For production use, additional security measures should be implemented, such as:
+- Authentication
+- Message encryption
+- Input validation
+- Rate limiting

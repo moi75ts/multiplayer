@@ -1,10 +1,10 @@
 package matlabmaster.multiplayer;
 
 import com.fs.starfarer.api.EveryFrameScript;
-import matlabmaster.multiplayer.SlowUpdates.CargoPodsCheck;
+import matlabmaster.multiplayer.SlowUpdates.CargoPodsSync;
 import org.apache.log4j.Logger;
 import org.apache.log4j.LogManager;
-
+import org.json.JSONException;
 
 
 public class SlowUpdateScript implements EveryFrameScript {
@@ -27,7 +27,6 @@ public class SlowUpdateScript implements EveryFrameScript {
         timer += amount;
         if (timer >= INTERVAL) {
             timer -= INTERVAL; // Reset with remainder
-            CargoPodsCheck.CargoPodsCheck();
         }
     }
 }

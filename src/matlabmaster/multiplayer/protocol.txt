@@ -5,3 +5,5 @@
 //4 Starscape update
 //5 location update
 //6 Orbits update
+//7 cargo pods check
+//8 cargo pods update

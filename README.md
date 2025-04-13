@@ -21,12 +21,9 @@ Do not use mod with devMode on
 
 ## FAQ
 
-- I already have a mod started. Can I just drag and drop this into my mod folder?
-    - Yes, but don't overwrite anything you already have.
-    - You probably mostly want the `.idea` folder (which contains IntelliJ configuration) and the `src` folder - then,
-      move any code you have into the `src` folder and fix the `package` in each .java file (ask if you don't know how).
-- Everything is working! Do I still need the `readme_files` folder?
-  - lol no, delete it.
+What don't work
+
+Colony destruction
 
 ## Explanation of Folders/Files
 

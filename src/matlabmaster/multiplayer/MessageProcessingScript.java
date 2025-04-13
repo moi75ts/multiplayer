@@ -8,6 +8,8 @@ import com.fs.starfarer.api.campaign.SectorAPI;
 import com.fs.starfarer.api.characters.AbilityPlugin;
 import com.fs.starfarer.api.fleet.FleetMemberAPI;
 import com.fs.starfarer.api.fleet.FleetMemberType;
+import matlabmaster.multiplayer.SlowUpdates.CargoPodsSync;
+import matlabmaster.multiplayer.utils.CargoPodsHelper;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.log4j.LogManager;
@@ -61,6 +63,9 @@ public class MessageProcessingScript implements EveryFrameScript {
                         break;
                     case 6: // Orbiting bodies update
                         handeOrbitUpdate(data);
+                        break;
+                    case 7:// cargopods check
+                        handleCargoPods(data);
                         break;
                     default:
                         LOGGER.log(Level.WARN, "Unknown command received: " + command);
@@ -200,6 +205,18 @@ public class MessageProcessingScript implements EveryFrameScript {
             }
         } catch (Exception e) {
             LOGGER.log(Level.ERROR, "Error handling marketUpdate " + e.getMessage());
+        }
+    }
+
+    private void handleCargoPods(JSONObject data){
+        try {
+            if (Objects.equals(MultiplayerModPlugin.getMode(), "server")) {
+                CargoPodsSync.compareCargoPods(data);
+            }else{
+                CargoPodsHelper.updateLocalPods(data);
+            }
+        } catch (Exception e) {
+            LOGGER.log(Level.ERROR, "Error handling cargo pods check " + e.getMessage());
         }
     }
 }

@@ -3,6 +3,7 @@ package matlabmaster.multiplayer.events;
 import com.fs.starfarer.api.EveryFrameScript;
 import com.fs.starfarer.api.Global;
 import matlabmaster.multiplayer.Client;
+import matlabmaster.multiplayer.SlowUpdates.CargoPodsSync;
 import matlabmaster.multiplayer.requests.StarSystemSync;
 import org.json.JSONException;
 
@@ -28,6 +29,7 @@ public class UnpauseScript implements EveryFrameScript {
                 StarSystemSync.orbitUpdateRequest();
                 try {
                     Client.requestMarketUpdate();
+                    CargoPodsSync.cargoPodsCheck();
                 } catch (JSONException e) {
                     throw new RuntimeException(e);
                 }

@@ -194,17 +194,17 @@ public class Client implements MessageSender, MessageReceiver {
     }
 
     public static void requestStarscapeUpdate() throws JSONException {
-        MessageSender sender = MultiplayerModPlugin.getMessageSender();
-        if (sender != null && sender.isActive()) {
-            try {
-                JSONObject message = new JSONObject();
-                message.put("command", 4);
-                message.put("playerId", User.getUserId());
-                sender.sendMessage(message.toString());
-            } catch (JSONException e) {
-                LOGGER.log(Level.ERROR, "Failed to construct JSON message: " + e.getMessage());
-            }
-        }
+        //MessageSender sender = MultiplayerModPlugin.getMessageSender();
+        //if (sender != null && sender.isActive()) {
+        //    try {
+        //        JSONObject message = new JSONObject();
+        //        message.put("command", 4);
+        //        message.put("playerId", User.getUserId());
+        //        sender.sendMessage(message.toString());
+        //    } catch (JSONException e) {
+        //        LOGGER.log(Level.ERROR, "Failed to construct JSON message: " + e.getMessage());
+        //    }
+        //}
     }
 
     public static void handleStarscapeUpdate(@NotNull JSONObject data) throws JSONException {

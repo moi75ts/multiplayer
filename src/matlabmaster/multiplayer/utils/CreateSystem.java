@@ -51,7 +51,6 @@ public class CreateSystem {
     }
 
     public static void createPlanet(JSONObject data, StarSystemAPI system) throws JSONException {
-        System.out.println("System Type: " + system.getType());
         SectorEntityToken orbitFocus;
         try {
             orbitFocus = system.getEntityById(data.getString("orbitFocusId"));

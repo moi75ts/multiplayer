@@ -12,7 +12,7 @@ import static matlabmaster.multiplayer.MultiplayerModPlugin.networkWindow;
 
 public class MessageHandler implements MessageReceiver {
     private static final Logger LOGGER = LogManager.getLogger("multiplayer");
-    private final String playerId;
+    private String playerId;
     private static final ConcurrentLinkedQueue<String> messageQueue = new ConcurrentLinkedQueue<>();
 
     public MessageHandler(String playerId) {
@@ -22,6 +22,7 @@ public class MessageHandler implements MessageReceiver {
     @Override
     public void onMessageReceived(String message) {
         LOGGER.log(Level.DEBUG, "Received message: " + message);
+        this.playerId = User.getUserId();
         try {
             JSONObject data = new JSONObject(message);
             String senderPlayerId = data.getString("playerId");

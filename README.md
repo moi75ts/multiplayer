@@ -17,8 +17,7 @@ You do NOT need IntelliJ Ultimate. Latest version of IntelliJ is 2024.3 as of wr
 
 ## Initial
 
-- Download or `git clone` this repository wherever you want to work.
-  - The simplest is to put it right into your mods folder; otherwise, you'll need to either copy it each time you change things or make an alias to it.
+Do not use mod with devMode on
 
 ## FAQ
 

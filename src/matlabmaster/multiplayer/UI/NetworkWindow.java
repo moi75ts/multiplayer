@@ -1,6 +1,7 @@
 package matlabmaster.multiplayer.UI;
 
 import matlabmaster.multiplayer.MultiplayerModPlugin;
+import matlabmaster.multiplayer.User;
 
 import javax.swing.*;
 import java.awt.*;
@@ -145,10 +146,12 @@ public class NetworkWindow extends JFrame {
 
             try {
                 if (MultiplayerModPlugin.getMode().equals("server")) {
+                    User.setUserIdWithoutUpdatingTheFile("server");
                     MultiplayerModPlugin.startServer(port);
                     messageField.append("Server started on port " + port + "\n");
                     updateStatus(true, "Connected - server mode");
                 } else {
+                    User.getUserIdFromFile();
                     MultiplayerModPlugin.startClient(ip, port);
                     if (MultiplayerModPlugin.getMessageSender() != null && MultiplayerModPlugin.getMessageSender().isActive()) {
                         messageField.append("Connected to " + ipPort + "\n");

@@ -43,8 +43,7 @@ public class Server implements MessageSender, MessageReceiver {
         try {
             serverSocket = new ServerSocket(port);
             isRunning = true;
-            System.out.println("Server started on port " + port);
-
+            System.out.println("Server started on port " + port + " with id " + User.getUserId());
             while (isRunning) {
                 Socket clientSocket = serverSocket.accept();
                 ClientHandler clientHandler = new ClientHandler(clientSocket);

@@ -4,17 +4,12 @@ import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.ModPlugin;
 import com.fs.starfarer.api.campaign.*;
 import com.fs.starfarer.api.campaign.econ.*;
+import com.fs.starfarer.api.fleet.FleetMemberAPI;
 import com.fs.starfarer.api.impl.campaign.ids.Entities;
-import com.fs.starfarer.api.impl.campaign.ids.Submarkets;
-import com.fs.starfarer.api.impl.campaign.intel.bases.LuddicPathCellsIntel;
-import com.fs.starfarer.api.impl.campaign.intel.bases.PirateActivityIntel;
 import com.fs.starfarer.api.impl.campaign.procgen.themes.BaseThemeGenerator;
-import com.fs.starfarer.campaign.Faction;
-import com.fs.starfarer.campaign.econ.Economy;
-import com.fs.starfarer.campaign.econ.Market;
 import matlabmaster.multiplayer.UI.NetworkWindow;
-import matlabmaster.multiplayer.utils.CreateSystem;
-import matlabmaster.multiplayer.utils.SectorCleanup;
+import matlabmaster.multiplayer.utils.CargoHelper;
+import matlabmaster.multiplayer.utils.FleetHelper;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.log4j.LogManager;
@@ -22,19 +17,15 @@ import org.jetbrains.annotations.NotNull;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.lwjgl.Sys;
-import org.lwjgl.util.vector.Vector2f;
 
 import javax.swing.*;
 import java.io.*;
 import java.net.Socket;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.*;
 
-import static com.fs.starfarer.api.Global.getFactory;
 import static com.fs.starfarer.api.Global.getSettings;
 
 public class Client implements MessageSender, MessageReceiver {
@@ -44,18 +35,16 @@ public class Client implements MessageSender, MessageReceiver {
     private Socket socket;
     private PrintWriter out;
     private BufferedReader in;
-    private final User user;
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
     private boolean isConnected = false;
-    private MessageReceiver messageHandler;
+    private final MessageReceiver messageHandler;
     private static NetworkWindow networkWindow;
 
     public Client(String serverIp, int serverPort, MessageReceiver messageHandler) {
         this.serverIp = serverIp;
         this.serverPort = serverPort;
-        this.user = new User();
         this.messageHandler = messageHandler;
-        this.networkWindow = MultiplayerModPlugin.getNetworkWindow();
+        networkWindow = MultiplayerModPlugin.getNetworkWindow();
     }
 
     public void connect() {
@@ -63,11 +52,11 @@ public class Client implements MessageSender, MessageReceiver {
             socket = new Socket(serverIp, serverPort);
             out = new PrintWriter(socket.getOutputStream(), true);
             in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            
+
             // Send user ID as first message
-            out.println(user.getUserId());
+            out.println(User.getUserId());
             isConnected = true;
-            
+
             // Start listening for messages
             executorService.execute(this::listenForMessages);
             System.out.println("Connected to server at " + serverIp + ":" + serverPort);
@@ -130,7 +119,7 @@ public class Client implements MessageSender, MessageReceiver {
     }
 
     public String getUserId() {
-        return user.getUserId();
+        return User.getUserId();
     }
 
     public static void initiateHandShake(MessageSender sender) {
@@ -253,7 +242,7 @@ public class Client implements MessageSender, MessageReceiver {
     public static void handleMarketUpdate(JSONObject data) throws JSONException {
         EconomyAPI economy = Global.getSector().getEconomy();
         JSONArray markets = data.getJSONArray("markets");
-        Boolean newMarket = false;
+        boolean newMarket = false;
         int i;
         int j;
         int k;
@@ -264,7 +253,7 @@ public class Client implements MessageSender, MessageReceiver {
             StarSystemAPI systemMarket = Global.getSector().getStarSystem(marketObject.getString("marketSystem"));
             market = economy.getMarket(marketObject.getString("marketId"));
             if (market == null) {
-                market = Global.getFactory().createMarket(marketObject.getString("marketId"),marketObject.getString("name"),marketObject.getInt("marketSize"));
+                market = Global.getFactory().createMarket(marketObject.getString("marketId"), marketObject.getString("name"), marketObject.getInt("marketSize"));
                 newMarket = true;
             }
             SectorEntityToken primaryEntity = Global.getSector().getEntityById(marketObject.getString("primaryEntity"));
@@ -314,21 +303,21 @@ public class Client implements MessageSender, MessageReceiver {
                 JSONObject entityObject = connectedEntities.getJSONObject(j);
                 SectorEntityToken entity = Global.getSector().getEntityById(entityObject.getString("EntityID"));
 
-                    if(entity == null){
+                if (entity == null) {
                     BaseThemeGenerator.EntityLocation loc = new BaseThemeGenerator.EntityLocation();
                     loc.type = BaseThemeGenerator.LocationType.STAR_ORBIT;
-                    loc.orbit = Global.getFactory().createCircularOrbit(Objects.requireNonNullElse(Global.getSector().getEntityById(entityObject.getString("entityOrbitFocusId")), systemMarket.getCenter()),(float) entityObject.getDouble("orbitAngle"),(float) entityObject.getDouble("orbitRadius"),(float) entityObject.getDouble("orbitPeriod"));
+                    loc.orbit = Global.getFactory().createCircularOrbit(Objects.requireNonNullElse(Global.getSector().getEntityById(entityObject.getString("entityOrbitFocusId")), systemMarket.getCenter()), (float) entityObject.getDouble("orbitAngle"), (float) entityObject.getDouble("orbitRadius"), (float) entityObject.getDouble("orbitPeriod"));
                     BaseThemeGenerator.AddedEntity added = BaseThemeGenerator.addNonSalvageEntity(systemMarket, loc, Entities.MAKESHIFT_STATION, marketObject.getString("ownerFactionId"));
                     added.entity.setName(entityObject.getString("entityName"));
                     added.entity.setId(entityObject.getString("EntityID"));
                     added.entity.getLocation().setX((float) entityObject.getDouble("locationx"));
                     added.entity.getLocation().setY((float) entityObject.getDouble("locationy"));
-                    if(market.getPrimaryEntity() == null){
+                    if (market.getPrimaryEntity() == null) {
                         market.setPrimaryEntity(added.entity);
-                    }else{
+                    } else {
                         market.getConnectedEntities().add(added.entity);
                     }
-                }else{
+                } else {
                     market.getConnectedEntities().add(entity);
                 }
             }
@@ -341,16 +330,14 @@ public class Client implements MessageSender, MessageReceiver {
                 market.addIndustry(industryObject.getString("industryId"));
                 Industry industry = market.getIndustry(industryObject.getString("industryId"));
                 industry.setImproved(industryObject.getBoolean("isImproved"));
-                if(industryObject.getBoolean("isDisrupted")){
+                if (industryObject.getBoolean("isDisrupted")) {
                     industry.setDisrupted((float) industryObject.getDouble("distruptedDays"));
                 }
             }
 
 
-            if(market.getConnectedEntities().contains(null)){
-                market.getConnectedEntities().remove(null); // somehow sometime i get null in there so i remove them to avoid crash
-            }
-            for(SectorEntityToken connectedEntity : market.getConnectedEntities()){
+            market.getConnectedEntities().remove(null); // somehow sometime i get null in there so i remove them to avoid crash
+            for (SectorEntityToken connectedEntity : market.getConnectedEntities()) {
                 connectedEntity.setMarket(market); //add the market to the planet's surface https://www.youtube.com/watch?v=HUbEhuzHur8 <3 <3 <3
             }
 
@@ -362,23 +349,22 @@ public class Client implements MessageSender, MessageReceiver {
                 submarketObject.setFaction(Global.getSector().getFaction(submarket.getString("submarketFaction")));
                 JSONArray commodities = submarket.getJSONArray("commodities");
                 CargoAPI cargo = submarketObject.getCargo();
-                for(k=0;k < commodities.length();k++){
-                    JSONObject commodity = commodities.getJSONObject(k);
-                    if(Objects.equals(commodity.getString("type"), "RESOURCES")){
-                        float currentCommodityValue = cargo.getCommodityQuantity(commodity.getString("commodityId"));
-                        float newCommodityValue = (float) commodity.getDouble("quantity");
-                        if(currentCommodityValue < newCommodityValue){
-                            cargo.addCommodity(commodity.getString("commodityId"),newCommodityValue-currentCommodityValue);
-                        }else if(currentCommodityValue > newCommodityValue){
-                            cargo.removeCommodity(commodity.getString("commodityId"),currentCommodityValue-newCommodityValue);
-                        }
-                    }
+                CargoHelper.clearCargo(cargo);
+                CargoHelper.addCargoFromSerialized(commodities,cargo);
+
+                JSONArray ships = submarket.getJSONArray("ships");
+                cargo.getMothballedShips().clear();
+                for(k = 0;k<ships.length();k++){
+                    JSONObject jsonShip = ships.getJSONObject(k);
+                    FleetMemberAPI fleetMember = FleetHelper.unSerializeFleetMember(jsonShip);
+                    cargo.getMothballedShips().addFleetMember(fleetMember);
                 }
             }
 
             if (newMarket) {
-                economy.addMarket(market,false);
+                economy.addMarket(market, false);
             }
+            economy.forceStockpileUpdate(market);
         }
     }
 }

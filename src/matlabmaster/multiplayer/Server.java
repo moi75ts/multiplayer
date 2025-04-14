@@ -4,6 +4,9 @@ import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.ModPlugin;
 import com.fs.starfarer.api.campaign.*;
 import com.fs.starfarer.api.campaign.econ.*;
+import com.fs.starfarer.campaign.fleet.FleetData;
+import matlabmaster.multiplayer.utils.CargoHelper;
+import matlabmaster.multiplayer.utils.FleetHelper;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.log4j.LogManager;
@@ -453,15 +456,15 @@ public class Server implements MessageSender, MessageReceiver {
                     JSONObject submarketObject = new JSONObject();
                     submarketObject.put("submarketSpecId",submarket.getSpecId());
                     submarketObject.put("submarketFaction",submarket.getFaction().getId());
-                    JSONArray commodities = new JSONArray();
+
+                    //general subMarkets things done, do cargo
                     CargoAPI cargo = submarket.getCargo();
-                    for (CargoStackAPI cargoStack : cargo.getStacksCopy()){
-                        JSONObject cargoStackObject = new JSONObject();
-                        cargoStackObject.put("commodityId",cargoStack.getCommodityId());
-                        cargoStackObject.put("quantity",cargoStack.getSize());
-                        cargoStackObject.put("type",cargoStack.getType());
-                        commodities.put(cargoStackObject);
-                    }
+                    //Ships
+                    JSONArray ships = FleetHelper.serializeFleet(cargo.getMothballedShips());
+                    submarketObject.put("ships",ships);
+                    //commodities
+                    List<CargoStackAPI> cargoStacks = cargo.getStacksCopy();
+                    JSONArray commodities = CargoHelper.serializeCargo(cargoStacks);
                     submarketObject.put("commodities",commodities);
                     subMarkets.put(submarketObject);
                 }

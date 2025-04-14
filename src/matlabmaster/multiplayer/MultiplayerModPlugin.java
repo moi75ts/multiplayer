@@ -9,7 +9,6 @@ import org.apache.log4j.Logger;
 import matlabmaster.multiplayer.UI.NetworkWindow;
 
 import javax.swing.*;
-import java.util.UUID;
 
 public class MultiplayerModPlugin extends BaseModPlugin {
     private static final Logger LOGGER = LogManager.getLogger("multiplayer");

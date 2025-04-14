@@ -2,6 +2,7 @@ package matlabmaster.multiplayer.utils;
 
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.*;
+import com.fs.starfarer.api.loading.FighterWingSpecAPI;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -10,7 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-public class CargoPodsHelper {
+public class CargoHelper {
     public static List<String> hasEverSeenPod = new ArrayList<>();
 
     public static JSONArray serializeCargo(List<CargoStackAPI> cargoStackList) throws JSONException {
@@ -26,6 +27,9 @@ public class CargoPodsHelper {
             } else if (Objects.equals(cargo.getType().toString(), "SPECIAL")) {
                 cargoObject.put("specialId", cargo.getSpecialDataIfSpecial().getId());
                 cargoObject.put("specialData", cargo.getSpecialDataIfSpecial().getData());
+            } else if (Objects.equals(cargo.getType().toString(), "FIGHTER_CHIP")) {
+                FighterWingSpecAPI fighterWingSpec = cargo.getFighterWingSpecIfWing();
+                cargoObject.put("fighterId", fighterWingSpec.getId());
             }
             cargoStacks.put(cargoObject);
         }
@@ -60,22 +64,26 @@ public class CargoPodsHelper {
         entity.getContainingLocation().removeEntity(entity);
     }
 
-    public static void addCargoFromSerialized(JSONArray serializedCargo, SectorEntityToken cargoPod) throws JSONException {
+    public static void addCargoFromSerialized(JSONArray serializedCargo, CargoAPI cargo) throws JSONException {
         int i;
         for (i = 0; i < serializedCargo.length(); i++) {
             JSONObject cargoToAdd = serializedCargo.getJSONObject(i);
             if (Objects.equals(cargoToAdd.getString("type"), "RESOURCES")) {
-                cargoPod.getCargo().addCommodity(cargoToAdd.getString("commodityId"), cargoToAdd.getInt("quantity"));
+                cargo.addCommodity(cargoToAdd.getString("commodityId"), cargoToAdd.getInt("quantity"));
             } else if (Objects.equals(cargoToAdd.getString("type"), "WEAPONS")) {
-                cargoPod.getCargo().addWeapons(cargoToAdd.getString("weaponId"), cargoToAdd.getInt("quantity"));
+                cargo.addWeapons(cargoToAdd.getString("weaponId"), cargoToAdd.getInt("quantity"));
+            } else if (Objects.equals(cargoToAdd.getString("type"), "FIGHTER_CHIP")) {
+                cargo.addFighters(cargoToAdd.getString("fighterId"), cargoToAdd.getInt("quantity"));
+                //todo fighter chips
             } else if (Objects.equals(cargoToAdd.getString("type"), "SPECIAL")) {
                 String specialData;
                 try {
                     specialData = cargoToAdd.getString("specialData");
-                } catch (NullPointerException e) {
-                    specialData = "";
+                } catch (Exception e) {
+                    specialData = null;
                 }
                 SpecialItemData specItemData = new SpecialItemData(cargoToAdd.getString("specialId"), specialData);
+                cargo.addSpecial(specItemData, cargoToAdd.getInt("quantity"));
             }
         }
     }
@@ -84,7 +92,7 @@ public class CargoPodsHelper {
         JSONArray remoteCargoPods = message.getJSONArray("cargoPods");
         JSONArray allCargoPodsEverSpawnedRemote = message.getJSONArray("allCargoPodsEverSpawned");
         List<String> allCargoPodsEverSpawnedRemoteList = new ArrayList<>();
-        List<SectorEntityToken> localCargoPods = CargoPodsHelper.getAllCargoPods();
+        List<SectorEntityToken> localCargoPods = CargoHelper.getAllCargoPods();
         List<JSONObject> toUpdate = new ArrayList<>();
         List<String> toRemove = new ArrayList<>();
         List<JSONObject> toCreate = new ArrayList<>();
@@ -106,7 +114,7 @@ public class CargoPodsHelper {
                     found = true;
                     // Compare cargo stacks
                     JSONArray remoteStacks = remotePod.getJSONArray("serializedCargo");
-                    JSONArray localStacks = CargoPodsHelper.serializeCargo(localPod.getCargo().getStacksCopy());
+                    JSONArray localStacks = CargoHelper.serializeCargo(localPod.getCargo().getStacksCopy());
                     if (!remoteStacks.toString().equals(localStacks.toString())) {
                         toUpdate.add(remotePod); // Store full remote pod data for upgrade
                         anythingToDo = true;
@@ -138,34 +146,46 @@ public class CargoPodsHelper {
                     anythingToDo = true;
                 }
             }
-            //process upgrade remove and create on server side to keep track
+        }
+        //process upgrade remove and create on server side to keep track
 
-            if (anythingToDo) {
-                for (String cargoPod : toRemove) {
-                    CargoPodsHelper.removeCargoPod(cargoPod);
+        if (anythingToDo) {
+            for (String cargoPod : toRemove) {
+                CargoHelper.removeCargoPod(cargoPod);
+            }
+
+
+            for (JSONObject newPod : toCreate) {
+                SectorEntityToken cargoPod;
+                try {
+                    String systemId = newPod.getString("system");
+                    StarSystemAPI system = Global.getSector().getStarSystem(systemId);
+                    cargoPod = system.addCustomEntity(newPod.getString("entityId"), message.getString("playerId") + " pods", "cargo_pods", "neutral");
+                } catch (Exception e) {
+                    LocationAPI hyperspace = Global.getSector().getHyperspace();
+                    cargoPod = hyperspace.addCustomEntity(newPod.getString("entityId"), message.getString("playerId") + " pods", "cargo_pods", "neutral");
                 }
+                cargoPod.setLocation((float) newPod.getDouble("locationX"), (float) newPod.getDouble("locationY"));
+                JSONArray serializedCargo = newPod.getJSONArray("serializedCargo");
+                CargoHelper.addCargoFromSerialized(serializedCargo, cargoPod.getCargo());
+                hasEverSeenPod.add(cargoPod.getId());
+                //todo pods actually drift in space, but not with this implementation this causes desync between client and server pod position
+            }
 
+            for (JSONObject updatePod : toUpdate) {
+                //todo ^^
+            }
 
-                for (JSONObject newPod : toCreate) {
-                    SectorEntityToken cargoPod;
-                    try {
-                        String systemId = newPod.getString("system");
-                        StarSystemAPI system = Global.getSector().getStarSystem(systemId);
-                        cargoPod = system.addCustomEntity(newPod.getString("entityId"), message.getString("playerId") + " pods", "cargo_pods", "neutral");
-                    } catch (Exception e) {
-                        LocationAPI hyperspace = Global.getSector().getHyperspace();
-                        cargoPod = hyperspace.addCustomEntity(newPod.getString("entityId"), message.getString("playerId") + " pods", "cargo_pods", "neutral");
-                    }
-                    cargoPod.setLocation((float) newPod.getDouble("locationX"), (float) newPod.getDouble("locationY"));
-                    JSONArray serializedCargo = newPod.getJSONArray("serializedCargo");
-                    CargoPodsHelper.addCargoFromSerialized(serializedCargo, cargoPod);
-                    hasEverSeenPod.add(cargoPod.getId());
-                }
+        }
+    }
 
-                for (JSONObject updatePod : toUpdate) {
-
-                }
+    public static void clearCargo(CargoAPI cargo) {
+        List<CargoStackAPI> cargoStacks = cargo.getStacksCopy();
+        for (CargoStackAPI cargoStack : cargoStacks) {
+            if (cargoStack.getHullModSpecIfHullMod() == null) { //important do not remove clear hullmods, otherwise in markets once the server has all the hull mods no other can spawn
+                cargoStack.setSize(0);
             }
         }
+        cargo.removeEmptyStacks();
     }
 }

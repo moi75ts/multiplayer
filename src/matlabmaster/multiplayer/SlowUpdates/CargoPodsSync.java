@@ -1,26 +1,21 @@
 package matlabmaster.multiplayer.SlowUpdates;
 
-import com.fs.starfarer.api.Global;
-import com.fs.starfarer.api.campaign.LocationAPI;
 import com.fs.starfarer.api.campaign.SectorEntityToken;
-import com.fs.starfarer.api.campaign.SpecialItemData;
-import com.fs.starfarer.api.campaign.StarSystemAPI;
 import matlabmaster.multiplayer.MessageSender;
 import matlabmaster.multiplayer.MultiplayerModPlugin;
 import matlabmaster.multiplayer.Server;
 import matlabmaster.multiplayer.User;
-import matlabmaster.multiplayer.utils.CargoPodsHelper;
+import matlabmaster.multiplayer.utils.CargoHelper;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
 public class CargoPodsSync {
     public static JSONObject getCargoPodsCheckMessage() throws JSONException {
-        List<SectorEntityToken> allCargoPods = CargoPodsHelper.getAllCargoPods();
+        List<SectorEntityToken> allCargoPods = CargoHelper.getAllCargoPods();
         JSONArray cargoPods = new JSONArray();
         for (SectorEntityToken cargoPod : allCargoPods) {
             JSONObject cargoPodObject = new JSONObject();
@@ -32,12 +27,12 @@ public class CargoPodsSync {
             } catch (NullPointerException e) {
                 cargoPodObject.put("isInHyperspace", cargoPod.isInHyperspace());
             }
-            JSONArray serializedCargo = CargoPodsHelper.serializeCargo(cargoPod.getCargo().getStacksCopy());
+            JSONArray serializedCargo = CargoHelper.serializeCargo(cargoPod.getCargo().getStacksCopy());
             cargoPodObject.put("serializedCargo", serializedCargo);
             cargoPods.put(cargoPodObject);
         }
         JSONObject message = new JSONObject();
-        message.put("allCargoPodsEverSpawned",CargoPodsHelper.hasEverSeenPod);
+        message.put("allCargoPodsEverSpawned", CargoHelper.hasEverSeenPod);
         message.put("command", 7);
         message.put("playerId", User.getUserId());
         message.put("cargoPods", cargoPods);
@@ -56,7 +51,7 @@ public class CargoPodsSync {
     }
 
     public static void compareCargoPods(JSONObject message) throws JSONException {
-        CargoPodsHelper.updateLocalPods(message);
+        CargoHelper.updateLocalPods(message);
         JSONObject responseMessage = getCargoPodsCheckMessage();
         Server server = (Server) MultiplayerModPlugin.getMessageSender();
         server.sendToEveryoneBut(message.getString("playerId"), responseMessage.toString());

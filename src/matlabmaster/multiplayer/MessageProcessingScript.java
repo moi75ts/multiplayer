@@ -9,7 +9,7 @@ import com.fs.starfarer.api.characters.AbilityPlugin;
 import com.fs.starfarer.api.fleet.FleetMemberAPI;
 import com.fs.starfarer.api.fleet.FleetMemberType;
 import matlabmaster.multiplayer.SlowUpdates.CargoPodsSync;
-import matlabmaster.multiplayer.utils.CargoPodsHelper;
+import matlabmaster.multiplayer.utils.CargoHelper;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.log4j.LogManager;
@@ -213,7 +213,7 @@ public class MessageProcessingScript implements EveryFrameScript {
             if (Objects.equals(MultiplayerModPlugin.getMode(), "server")) {
                 CargoPodsSync.compareCargoPods(data);
             }else{
-                CargoPodsHelper.updateLocalPods(data);
+                CargoHelper.updateLocalPods(data);
             }
         } catch (Exception e) {
             LOGGER.log(Level.ERROR, "Error handling cargo pods check " + e.getMessage());

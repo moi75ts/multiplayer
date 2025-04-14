@@ -37,6 +37,7 @@ public class CargoPodsSync {
             cargoPods.put(cargoPodObject);
         }
         JSONObject message = new JSONObject();
+        message.put("allCargoPodsEverSpawned",CargoPodsHelper.hasEverSeenPod);
         message.put("command", 7);
         message.put("playerId", User.getUserId());
         message.put("cargoPods", cargoPods);

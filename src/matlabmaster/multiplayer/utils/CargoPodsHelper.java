@@ -11,26 +11,28 @@ import java.util.List;
 import java.util.Objects;
 
 public class CargoPodsHelper {
+    public static List<String> hasEverSeenPod = new ArrayList<>();
+
     public static JSONArray serializeCargo(List<CargoStackAPI> cargoStackList) throws JSONException {
         JSONArray cargoStacks = new JSONArray();
-        for(CargoStackAPI cargo : cargoStackList){
+        for (CargoStackAPI cargo : cargoStackList) {
             JSONObject cargoObject = new JSONObject();
             cargoObject.put("quantity", cargo.getSize());
-            cargoObject.put("type",cargo.getType());
-            if(Objects.equals(cargo.getType().toString(), "RESOURCES")){
-                cargoObject.put("commodityId",cargo.getCommodityId());
+            cargoObject.put("type", cargo.getType());
+            if (Objects.equals(cargo.getType().toString(), "RESOURCES")) {
+                cargoObject.put("commodityId", cargo.getCommodityId());
             } else if (Objects.equals(cargo.getType().toString(), "WEAPONS")) {
-                cargoObject.put("weaponId",cargo.getData().toString());
-            } else if(Objects.equals(cargo.getType().toString(), "SPECIAL")){
-                cargoObject.put("specialId",cargo.getSpecialDataIfSpecial().getId());
-                cargoObject.put("specialData",cargo.getSpecialDataIfSpecial().getData());
+                cargoObject.put("weaponId", cargo.getData().toString());
+            } else if (Objects.equals(cargo.getType().toString(), "SPECIAL")) {
+                cargoObject.put("specialId", cargo.getSpecialDataIfSpecial().getId());
+                cargoObject.put("specialData", cargo.getSpecialDataIfSpecial().getData());
             }
             cargoStacks.put(cargoObject);
         }
         return cargoStacks;
     }
 
-    public static List<SectorEntityToken> getAllCargoPods(){
+    public static List<SectorEntityToken> getAllCargoPods() {
         List<SectorEntityToken> allCargoPods = new ArrayList<>();
 
         // Check all star systems
@@ -53,43 +55,52 @@ public class CargoPodsHelper {
         return allCargoPods;
     }
 
-    public static void removeCargoPod(String cargoPodId){
+    public static void removeCargoPod(String cargoPodId) {
         SectorEntityToken entity = Global.getSector().getEntityById(cargoPodId);
         entity.getContainingLocation().removeEntity(entity);
     }
 
-    public static void addCargoFromSerialized(JSONArray serializedCargo,SectorEntityToken cargoPod) throws JSONException {
+    public static void addCargoFromSerialized(JSONArray serializedCargo, SectorEntityToken cargoPod) throws JSONException {
         int i;
-        for (i = 0;i<serializedCargo.length();i++){
+        for (i = 0; i < serializedCargo.length(); i++) {
             JSONObject cargoToAdd = serializedCargo.getJSONObject(i);
-            if(Objects.equals(cargoToAdd.getString("type"), "RESOURCES")){
-                cargoPod.getCargo().addCommodity(cargoToAdd.getString("commodityId"),cargoToAdd.getInt("quantity"));
+            if (Objects.equals(cargoToAdd.getString("type"), "RESOURCES")) {
+                cargoPod.getCargo().addCommodity(cargoToAdd.getString("commodityId"), cargoToAdd.getInt("quantity"));
             } else if (Objects.equals(cargoToAdd.getString("type"), "WEAPONS")) {
-                cargoPod.getCargo().addWeapons(cargoToAdd.getString("weaponId"),cargoToAdd.getInt("quantity"));
+                cargoPod.getCargo().addWeapons(cargoToAdd.getString("weaponId"), cargoToAdd.getInt("quantity"));
             } else if (Objects.equals(cargoToAdd.getString("type"), "SPECIAL")) {
                 String specialData;
-                try{
+                try {
                     specialData = cargoToAdd.getString("specialData");
-                }catch (NullPointerException e){
+                } catch (NullPointerException e) {
                     specialData = "";
                 }
-                SpecialItemData specItemData = new SpecialItemData(cargoToAdd.getString("specialId"),specialData);
+                SpecialItemData specItemData = new SpecialItemData(cargoToAdd.getString("specialId"), specialData);
             }
         }
     }
 
     public static void updateLocalPods(JSONObject message) throws JSONException {
         JSONArray remoteCargoPods = message.getJSONArray("cargoPods");
+        JSONArray allCargoPodsEverSpawnedRemote = message.getJSONArray("allCargoPodsEverSpawned");
+        List<String> allCargoPodsEverSpawnedRemoteList = new ArrayList<>();
         List<SectorEntityToken> localCargoPods = CargoPodsHelper.getAllCargoPods();
         List<JSONObject> toUpdate = new ArrayList<>();
         List<String> toRemove = new ArrayList<>();
         List<JSONObject> toCreate = new ArrayList<>();
         Boolean anythingToDo = false;
+        int i;
 
+        for (i = 0; i < allCargoPodsEverSpawnedRemote.length(); i++) {
+            allCargoPodsEverSpawnedRemoteList.add(allCargoPodsEverSpawnedRemote.getString(i));
+        }
         // Check local pods against remote
         for (SectorEntityToken localPod : localCargoPods) {
+            if (!hasEverSeenPod.contains(localPod.getId())) {
+                hasEverSeenPod.add(localPod.getId());//add the id of our recently spawned cargopod
+            }
             boolean found = false;
-            for (int i = 0; i < remoteCargoPods.length(); i++) {
+            for (i = 0; i < remoteCargoPods.length(); i++) {
                 JSONObject remotePod = remoteCargoPods.getJSONObject(i);
                 if (Objects.equals(localPod.getId(), remotePod.getString("entityId"))) {
                     found = true;
@@ -103,14 +114,16 @@ public class CargoPodsHelper {
                     break;
                 }
             }
-            if (!found) {
-                toRemove.add(localPod.getId());
-                anythingToDo = true;
+            if (!found) {//in local but not in remote
+                if (allCargoPodsEverSpawnedRemoteList.contains(localPod.getId())) {//meaning the cargo spawn was never spawned in, and should not be removed
+                    toRemove.add(localPod.getId());//fixes race condition
+                    anythingToDo = true;
+                }
             }
         }
 
         // Check remote pods against local to find new ones
-        for (int i = 0; i < remoteCargoPods.length(); i++) {
+        for (i = 0; i < remoteCargoPods.length(); i++) {
             JSONObject remotePod = remoteCargoPods.getJSONObject(i);
             boolean exists = false;
             for (SectorEntityToken localPod : localCargoPods) {
@@ -120,35 +133,38 @@ public class CargoPodsHelper {
                 }
             }
             if (!exists) {
-                toCreate.add(remotePod);
-                anythingToDo = true;
-            }
-        }
-        //process upgrade remove and create on server side to keep track
-
-        if(anythingToDo) {
-            for (String cargoPod : toRemove) {
-                CargoPodsHelper.removeCargoPod(cargoPod);
-            }
-
-
-            for (JSONObject newPod : toCreate) {
-                SectorEntityToken cargoPod;
-                try {
-                    String systemId = newPod.getString("system");
-                    StarSystemAPI system = Global.getSector().getStarSystem(systemId);
-                    cargoPod = system.addCustomEntity(newPod.getString("entityId"), message.getString("playerId") + " pods", "cargo_pods", "neutral");
-                } catch (Exception e) {
-                    LocationAPI hyperspace = Global.getSector().getHyperspace();
-                    cargoPod = hyperspace.addCustomEntity(newPod.getString("entityId"), message.getString("playerId") + " pods", "cargo_pods", "neutral");
+                if (!hasEverSeenPod.contains(remotePod.getString("entityId"))) {//meaning the cargo spawn was spawned in then removed, and should not be recreated
+                    toCreate.add(remotePod);
+                    anythingToDo = true;
                 }
-                cargoPod.setLocation((float) newPod.getDouble("locationX"), (float) newPod.getDouble("locationY"));
-                JSONArray serializedCargo = newPod.getJSONArray("serializedCargo");
-                CargoPodsHelper.addCargoFromSerialized(serializedCargo, cargoPod);
             }
+            //process upgrade remove and create on server side to keep track
 
-            for (JSONObject updatePod : toUpdate){
+            if (anythingToDo) {
+                for (String cargoPod : toRemove) {
+                    CargoPodsHelper.removeCargoPod(cargoPod);
+                }
 
+
+                for (JSONObject newPod : toCreate) {
+                    SectorEntityToken cargoPod;
+                    try {
+                        String systemId = newPod.getString("system");
+                        StarSystemAPI system = Global.getSector().getStarSystem(systemId);
+                        cargoPod = system.addCustomEntity(newPod.getString("entityId"), message.getString("playerId") + " pods", "cargo_pods", "neutral");
+                    } catch (Exception e) {
+                        LocationAPI hyperspace = Global.getSector().getHyperspace();
+                        cargoPod = hyperspace.addCustomEntity(newPod.getString("entityId"), message.getString("playerId") + " pods", "cargo_pods", "neutral");
+                    }
+                    cargoPod.setLocation((float) newPod.getDouble("locationX"), (float) newPod.getDouble("locationY"));
+                    JSONArray serializedCargo = newPod.getJSONArray("serializedCargo");
+                    CargoPodsHelper.addCargoFromSerialized(serializedCargo, cargoPod);
+                    hasEverSeenPod.add(cargoPod.getId());
+                }
+
+                for (JSONObject updatePod : toUpdate) {
+
+                }
             }
         }
     }

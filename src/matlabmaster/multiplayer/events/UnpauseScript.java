@@ -29,7 +29,6 @@ public class UnpauseScript implements EveryFrameScript {
                 StarSystemSync.orbitUpdateRequest();
                 try {
                     Client.requestMarketUpdate();
-                    CargoPodsSync.cargoPodsCheck();
                 } catch (JSONException e) {
                     throw new RuntimeException(e);
                 }

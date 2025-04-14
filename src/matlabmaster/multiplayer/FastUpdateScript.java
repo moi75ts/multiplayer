@@ -5,6 +5,7 @@ import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.CampaignFleetAPI;
 import com.fs.starfarer.api.characters.AbilityPlugin;
 import com.fs.starfarer.api.fleet.FleetMemberViewAPI;
+import matlabmaster.multiplayer.SlowUpdates.CargoPodsSync;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.log4j.LogManager;
@@ -37,6 +38,11 @@ public class FastUpdateScript implements EveryFrameScript {
         if (timer >= INTERVAL) {
             timer -= INTERVAL; // Reset with remainder to avoid drift
             sendPositionUpdate();
+            try {
+                CargoPodsSync.cargoPodsCheck();
+            } catch (JSONException e) {
+                throw new RuntimeException(e);
+            }
         }
     }
 

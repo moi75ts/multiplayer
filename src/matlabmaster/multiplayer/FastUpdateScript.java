@@ -3,9 +3,10 @@ package matlabmaster.multiplayer;
 import com.fs.starfarer.api.EveryFrameScript;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.CampaignFleetAPI;
+import com.fs.starfarer.api.campaign.FleetDataAPI;
 import com.fs.starfarer.api.characters.AbilityPlugin;
-import com.fs.starfarer.api.fleet.FleetMemberViewAPI;
 import matlabmaster.multiplayer.SlowUpdates.CargoPodsSync;
+import matlabmaster.multiplayer.utils.FleetHelper;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.log4j.LogManager;
@@ -13,7 +14,6 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import org.json.JSONException;
 
-import java.util.List;
 import java.util.Map;
 
 public class FastUpdateScript implements EveryFrameScript {
@@ -72,16 +72,9 @@ public class FastUpdateScript implements EveryFrameScript {
                     abilitiesObject.put(abilityObject); //both active and in progress needed because sensor burst never return true to isactive, race condition??
                 }
                 message.put("abilities",abilitiesObject);
-                JSONArray ships = new JSONArray();
-
-                List<FleetMemberViewAPI> views = Global.getSector().getPlayerFleet().getViews();
-                for (FleetMemberViewAPI view : views) {
-                    JSONArray ship = new JSONArray();
-                    ship.put(view.getMember().getShipName());
-                    ship.put(view.getMember().getHullId());
-                    ships.put(ship);
-                }
-                message.put("ships", ships);
+                FleetDataAPI fleetData = Global.getSector().getPlayerFleet().getFleetData();
+                JSONArray serializedFleet = FleetHelper.serializeFleetShips(fleetData);
+                message.put("ships", serializedFleet);
 
                 sender.sendMessage(message.toString());
                 LOGGER.log(Level.DEBUG, "Sent position update for player " + playerId);

@@ -10,6 +10,7 @@ import com.fs.starfarer.api.fleet.FleetMemberAPI;
 import com.fs.starfarer.api.fleet.FleetMemberType;
 import matlabmaster.multiplayer.SlowUpdates.CargoPodsSync;
 import matlabmaster.multiplayer.utils.CargoHelper;
+import matlabmaster.multiplayer.utils.FleetHelper;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.log4j.LogManager;
@@ -83,7 +84,6 @@ public class MessageProcessingScript implements EveryFrameScript {
             float serverY = (float) data.getDouble("y");
             String starSystem = data.getString("starSystem");
             boolean transponder = data.getBoolean("transponder");
-            JSONArray ships = data.getJSONArray("ships");
             float moveDestinationX = (float) data.getDouble("moveDestinationX");
             float moveDestinationY = (float) data.getDouble("moveDestinationY");
             JSONArray abilities = data.getJSONArray("abilities");
@@ -97,15 +97,10 @@ public class MessageProcessingScript implements EveryFrameScript {
                 if (fleet == null) {
                     fleet = Global.getFactory().createEmptyFleet("neutral", "Fleet of " + senderPlayerId, true);
                     fleet.setId(senderPlayerId);
-                    for (i = 0; i < ships.length(); i++) {
-                        JSONArray ship = ships.getJSONArray(i);
-                        String shipName = ship.getString(0).isEmpty() ? "Unnamed Ship" : ship.getString(0);
-                        String variantId = ship.getString(1) + "_Hull";//this is done this way (with the +_Hull) because the default ship have a weird default Hullvariant id
-
-                        FleetMemberAPI member = Global.getFactory().createFleetMember(FleetMemberType.SHIP, variantId);
-                        member.setShipName(shipName);
-                        fleet.getFleetData().addFleetMember(member);
-                        LOGGER.log(Level.DEBUG, "Added " + shipName + " (" + variantId + ") to fleet");
+                    JSONArray ships = data.getJSONArray("ships");
+                    for(i = 0; i < ships.length(); i++){
+                        fleet.getFleetData().addFleetMember(FleetHelper.unSerializeFleetMember(ships.getJSONObject(i)));
+                        //todo live updates
                     }
 
                     fleet.setAI(null);

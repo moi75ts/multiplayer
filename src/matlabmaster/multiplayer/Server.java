@@ -4,7 +4,6 @@ import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.ModPlugin;
 import com.fs.starfarer.api.campaign.*;
 import com.fs.starfarer.api.campaign.econ.*;
-import com.fs.starfarer.campaign.fleet.FleetData;
 import matlabmaster.multiplayer.utils.CargoHelper;
 import matlabmaster.multiplayer.utils.FleetHelper;
 import org.apache.log4j.Level;
@@ -21,9 +20,6 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.locks.Condition;
-
-import org.lazywizard.console.Console;
 
 import static com.fs.starfarer.api.Global.getSettings;
 import static matlabmaster.multiplayer.MultiplayerModPlugin.networkWindow;
@@ -460,7 +456,7 @@ public class Server implements MessageSender, MessageReceiver {
                     //general subMarkets things done, do cargo
                     CargoAPI cargo = submarket.getCargo();
                     //Ships
-                    JSONArray ships = FleetHelper.serializeFleet(cargo.getMothballedShips());
+                    JSONArray ships = FleetHelper.serializeFleetShips(cargo.getMothballedShips());
                     submarketObject.put("ships",ships);
                     //commodities
                     List<CargoStackAPI> cargoStacks = cargo.getStacksCopy();

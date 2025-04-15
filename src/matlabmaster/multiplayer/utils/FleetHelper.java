@@ -2,7 +2,6 @@ package matlabmaster.multiplayer.utils;
 
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.FleetDataAPI;
-import com.fs.starfarer.api.combat.ShipHullSpecAPI;
 import com.fs.starfarer.api.combat.ShipVariantAPI;
 import com.fs.starfarer.api.fleet.FleetMemberAPI;
 import com.fs.starfarer.api.fleet.FleetMemberType;
@@ -15,7 +14,7 @@ import java.util.List;
 import java.util.Set;
 
 public class FleetHelper {
-    public static JSONArray serializeFleet(FleetDataAPI fleet) throws JSONException {
+    public static JSONArray serializeFleetShips(FleetDataAPI fleet) throws JSONException {
         JSONArray serializedFleet = new JSONArray();
         for(FleetMemberAPI ship : fleet.getMembersListWithFightersCopy()){
             JSONObject shipSerialized = new JSONObject();
@@ -25,6 +24,7 @@ public class FleetHelper {
                 hullId = hullId.substring(0, hullId.indexOf("_default_"));
             }
             //todo please fix fucked specId for starting ships
+            //todo also the regex breaks some more complicated variants, D A variants transforming it into a D variant
             //I had a beautiful code using getSpecId, until for some reason i realised that the starting ships have a fucked up specId, and if i use baseHull, i kill all the variants
             shipSerialized.put("hull", hullId);
             shipSerialized.put("combatReadiness",ship.getRepairTracker().getCR());
@@ -72,7 +72,12 @@ public class FleetHelper {
         int i;
         FleetMemberAPI ship = Global.getFactory().createFleetMember(FleetMemberType.SHIP,shipObject.getString("hull")+"_Hull");
         ship.getRepairTracker().setCR((float) shipObject.getDouble("combatReadiness"));
-        ship.setShipName(shipObject.getString("name"));
+        try{
+            ship.setShipName(shipObject.getString("name"));
+        }catch (Exception e){
+            ship.setShipName("");
+        }
+
         ship.getRepairTracker().setMothballed(shipObject.getBoolean("isMothballed"));
         ship.getVariant().setNumFluxVents(shipObject.getInt("fluxVents"));
         ship.getVariant().setNumFluxCapacitors(shipObject.getInt("fluxCapacitors"));

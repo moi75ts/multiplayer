@@ -1,19 +1,115 @@
 package matlabmaster.multiplayer.utils;
 
 import com.fs.starfarer.api.Global;
+import com.fs.starfarer.api.campaign.CampaignFleetAPI;
 import com.fs.starfarer.api.campaign.FleetDataAPI;
+import com.fs.starfarer.api.characters.AbilityPlugin;
 import com.fs.starfarer.api.combat.ShipVariantAPI;
 import com.fs.starfarer.api.fleet.FleetMemberAPI;
 import com.fs.starfarer.api.fleet.FleetMemberType;
+import com.fs.starfarer.api.impl.campaign.abilities.TransponderAbility;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.util.Collection;
-import java.util.List;
-import java.util.Set;
+import java.awt.print.Book;
+import java.util.*;
 
 public class FleetHelper {
+    public static JSONObject serializeFleet(CampaignFleetAPI fleet) throws JSONException {
+        JSONObject serializedFleet = new JSONObject();
+        serializedFleet.put("id",fleet.getId());
+        serializedFleet.put("locationX",fleet.getLocation().getX());
+        serializedFleet.put("locationY",fleet.getLocation().getY());
+        serializedFleet.put("location",Global.getSector().getCurrentLocation());
+        serializedFleet.put("factionId",fleet.getFaction().getId());
+        try{
+            serializedFleet.put("currentAssignment",fleet.getCurrentAssignment().getActionText());
+            serializedFleet.put("currentAssignmentTargetId",fleet.getCurrentAssignment().getTarget().getId());
+        }catch (Exception e){
+            //do nothing no Assignment
+            //occurs when players fleet
+        }
+
+        serializedFleet.put("moveDestinationX",fleet.getMoveDestination().getX());
+        serializedFleet.put("moveDestinationY",fleet.getMoveDestination().getY());
+        serializedFleet.put("isPlayerFleet",fleet.isPlayerFleet());
+        serializedFleet.put("isTransponderOn",fleet.isTransponderOn());
+
+        serializedFleet.put("abilities", serializeAbilities(fleet.getAbilities()));
+        serializedFleet.put("cargo",CargoHelper.serializeCargo(fleet.getCargo().getStacksCopy()));
+        serializedFleet.put("ships",serializeFleetShips(fleet.getFleetData()));
+        //todo add persons ie commanders
+        return serializedFleet;
+    }
+
+
+    /**
+     * Unserializes a fleet from a JSONArray
+     * @param serializedFleet JSONArray containing serialized ship data
+     * @param fleet The fleet unSerialize (give it an empty fleet)
+     * @throws JSONException If JSON parsing fails
+     */
+    public static void unSerializeFleet(JSONObject serializedFleet, CampaignFleetAPI fleet, boolean moveDestination) throws JSONException {
+        fleet.setId(serializedFleet.getString("id"));
+        fleet.getLocation().set((float)serializedFleet.getDouble("locationX"), (float) serializedFleet.getDouble("locationY"));
+        fleet.setFaction(serializedFleet.getString("factionId"));
+        if(moveDestination){
+            fleet.setMoveDestination((float) serializedFleet.getDouble("moveDestinationX"), (float) serializedFleet.getDouble("moveDestinationY"));
+        }
+        fleet.setTransponderOn(serializedFleet.getBoolean("isTransponderOn"));
+        //todo assignments
+
+        // Unserialize abilities
+        JSONArray abilities = serializedFleet.getJSONArray("abilities");
+        unSerializeAbilities(abilities, fleet);
+
+        // Unserialize cargo
+        fleet.getCargo().clear();
+        CargoHelper.addCargoFromSerialized(serializedFleet.getJSONArray("cargo"), fleet.getCargo());
+
+        // Unserialize ships
+        JSONArray ships = serializedFleet.getJSONArray("ships");
+        unSerializeFleetMember(ships, fleet);
+        
+        //todo add persons ie commanders when implemented in serialize
+    }
+
+    public static JSONArray serializeAbilities(Map<String, AbilityPlugin> abilities) throws JSONException {
+        JSONArray serializedAbilities = new JSONArray();
+        for(AbilityPlugin ability: abilities.values()){
+            JSONObject serializedAbility = new JSONObject();
+            if(!Objects.equals(ability.getId(), "transponder")){
+                serializedAbility.put("abilityId",ability.getId());
+                serializedAbility.put("abilityActive",ability.isActive());//used for continous abilities ei, go dark, sustained burn, transponder
+                serializedAbility.put("abilityInProgress",ability.isInProgress());//used for one time then cooldown ie, emergency burn, interdiction pulse ...
+                serializedAbilities.put(serializedAbility);
+            }
+        }
+        return serializedAbilities;
+    }
+
+    public static void unSerializeAbilities(JSONArray abilitiesArray, CampaignFleetAPI fleet) throws JSONException {
+        for(int i = 0; i<abilitiesArray.length() ;i++){
+            JSONObject abilityObject = abilitiesArray.getJSONObject(i);
+            AbilityPlugin ability = fleet.getAbility(abilityObject.getString("abilityId"));
+            if(ability == null){
+                fleet.addAbility(abilityObject.getString("abilityId"));
+            }else{
+                if(abilityObject.getBoolean("abilityActive") && !ability.isActive()){
+                    ability.activate();
+                } else if (abilityObject.getBoolean("abilityInProgress") && !ability.isActiveOrInProgress()){
+                    ability.activate();
+                }else if(ability.isActiveOrInProgress() && !abilityObject.getBoolean("abilityInProgress")){
+                    ability.deactivate();
+                }else if(ability.isActive() && !abilityObject.getBoolean("abilityActive")){
+                    ability.deactivate();
+                }
+            }
+        }
+    }
+
+
     public static JSONArray serializeFleetShips(FleetDataAPI fleet) throws JSONException {
         JSONArray serializedFleet = new JSONArray();
         for(FleetMemberAPI ship : fleet.getMembersListWithFightersCopy()){
@@ -103,4 +199,23 @@ public class FleetHelper {
         }
         return ship;
     }
+
+    /**
+     * Unserializes multiple fleet members from a JSONArray and adds them to the fleet
+     * @param ships JSONArray containing serialized ship data
+     * @param fleet The fleet to add the ships to
+     * @throws JSONException If JSON parsing fails
+     */
+    public static void unSerializeFleetMember(JSONArray ships, CampaignFleetAPI fleet) throws JSONException {
+        for (int i = 0; i < ships.length(); i++) {
+            JSONObject shipObject = ships.getJSONObject(i);
+            FleetMemberAPI member = unSerializeFleetMember(shipObject);
+            fleet.getFleetData().addFleetMember(member);
+        }
+    }
+
+    public static void fleetSpawned(FleetDataAPI fleet){
+
+    }
+
 }

@@ -54,28 +54,7 @@ public class FastUpdateScript implements EveryFrameScript {
                 CampaignFleetAPI fleet = Global.getSector().getPlayerFleet();
                 message.put("playerId", playerId);
                 message.put("command", 5);
-                message.put("x", Global.getSector().getPlayerFleet().getLocation().x );
-                message.put("y", Global.getSector().getPlayerFleet().getLocation().y);
-                message.put("starSystem", Global.getSector().getCurrentLocation().getName());
-                message.put("transponder", Global.getSector().getPlayerFleet().isTransponderOn());
-                message.put("moveDestinationX",fleet.getMoveDestination().x);//used for smooth movement
-                message.put("moveDestinationY",fleet.getMoveDestination().y);
-
-                //abilities ie go dark, interdiction pulse ...
-                JSONArray abilitiesObject = new JSONArray();
-                Map<String, AbilityPlugin> abilities = fleet.getAbilities();
-                for(AbilityPlugin ability : abilities.values()){
-                    JSONObject abilityObject = new JSONObject();
-                    abilityObject.put("abilityId",ability.getId());
-                    abilityObject.put("abilityActive",ability.isActive());//used for continous abilities ei, go dark, sustained burn, transponder
-                    abilityObject.put("abilityInProgress",ability.isInProgress());//used for one time then cooldown ie, emergency burn, interdiction pulse ...
-                    abilitiesObject.put(abilityObject); //both active and in progress needed because sensor burst never return true to isactive, race condition??
-                }
-                message.put("abilities",abilitiesObject);
-                FleetDataAPI fleetData = Global.getSector().getPlayerFleet().getFleetData();
-                JSONArray serializedFleet = FleetHelper.serializeFleetShips(fleetData);
-                message.put("ships", serializedFleet);
-
+                message.put("fleet",FleetHelper.serializeFleet(fleet));
                 sender.sendMessage(message.toString());
                 LOGGER.log(Level.DEBUG, "Sent position update for player " + playerId);
             } catch (JSONException e) {

@@ -5,6 +5,7 @@ import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.CampaignFleetAPI;
 import com.fs.starfarer.api.campaign.LocationAPI;
 import com.fs.starfarer.api.campaign.SectorAPI;
+import com.fs.starfarer.api.campaign.SectorEntityToken;
 import com.fs.starfarer.api.characters.AbilityPlugin;
 import com.fs.starfarer.api.fleet.FleetMemberAPI;
 import com.fs.starfarer.api.fleet.FleetMemberType;
@@ -19,6 +20,8 @@ import org.json.JSONObject;
 
 import java.util.Objects;
 import java.util.concurrent.ConcurrentLinkedQueue;
+
+import static java.lang.Math.abs;
 
 public class MessageProcessingScript implements EveryFrameScript {
     private static final Logger LOGGER = LogManager.getLogger("MessageProcessingScript");
@@ -80,68 +83,49 @@ public class MessageProcessingScript implements EveryFrameScript {
     private void handleFleetUpdate(JSONObject data) {
         try {
             String senderPlayerId = data.getString("playerId");
-            float serverX = (float) data.getDouble("x");
-            float serverY = (float) data.getDouble("y");
-            String starSystem = data.getString("starSystem");
-            boolean transponder = data.getBoolean("transponder");
-            float moveDestinationX = (float) data.getDouble("moveDestinationX");
-            float moveDestinationY = (float) data.getDouble("moveDestinationY");
-            JSONArray abilities = data.getJSONArray("abilities");
-            int i;
+            JSONObject serializedFleet = data.getJSONObject("fleet");
+            String location = serializedFleet.getString("location");
             SectorAPI sector = Global.getSector();
             LocationAPI currentLocation = sector.getCurrentLocation();
-            String currentSystemName = currentLocation != null ? currentLocation.getName() : "";
-
+            float serverX = 0;
+            float serverY = 0;
+            float remoteX = (float) serializedFleet.getDouble("locationX");
+            float remoteY = (float) serializedFleet.getDouble("locationY");
+            String currentSystemName = currentLocation != null ? currentLocation.getName() : "";//??
             CampaignFleetAPI fleet = (CampaignFleetAPI) sector.getEntityById(senderPlayerId);
-            if (Objects.equals(starSystem.toLowerCase(), currentSystemName.toLowerCase())) {
+            if (Objects.equals(location.toLowerCase(), currentSystemName.toLowerCase())) {
                 if (fleet == null) {
-                    fleet = Global.getFactory().createEmptyFleet("neutral", "Fleet of " + senderPlayerId, true);
-                    fleet.setId(senderPlayerId);
-                    JSONArray ships = data.getJSONArray("ships");
-                    for(i = 0; i < ships.length(); i++){
-                        fleet.getFleetData().addFleetMember(FleetHelper.unSerializeFleetMember(ships.getJSONObject(i)));
-                        //todo live updates
-                    }
-
-                    fleet.setAI(null);
-                   assert currentLocation != null;
+                    fleet = Global.getFactory().createEmptyFleet("neutral", "WIP", true);
+                    assert currentLocation != null;
                     currentLocation.addEntity(fleet);
-                }
-
-
-                for(i = 0; i<abilities.length() ;i++){
-                    JSONObject abilityObject = abilities.getJSONObject(i);
-                    if(Objects.equals(abilityObject.getString("abilityId"), "transponder")){
-                        fleet.setTransponderOn(transponder);
-                        continue; // transponder seems to behave differently than other abilities with inprogress always true, even when off
-                    }
-                    AbilityPlugin ability = fleet.getAbility(abilityObject.getString("abilityId"));
-                    if(ability == null){
-                        fleet.addAbility(abilityObject.getString("abilityId"));
-                    }else{
-                        if(abilityObject.getBoolean("abilityActive")){
-                            ability.activate();
-                        } else if (abilityObject.getBoolean("abilityInProgress")){
-                            ability.activate();
-                        }else {
-                            ability.deactivate();
-                        }
+                    FleetHelper.unSerializeFleet(serializedFleet,fleet,false);
+                    fleet.setId(senderPlayerId);
+                    fleet.setFaction("neutral");
+                    fleet.setName("Fleet of " + senderPlayerId);
+                } else {
+                    SectorEntityToken entity = Global.getSector().getEntityById(senderPlayerId);
+                    if (entity instanceof CampaignFleetAPI) {
+                        fleet = (CampaignFleetAPI) entity;
                     }
                 }
+                fleet.setAI(null);
+                fleet.setMoveDestination(fleet.getLocation().getX(), fleet.getLocation().getY());
+                FleetHelper.unSerializeAbilities(serializedFleet.getJSONArray("abilities"),fleet);
+                fleet.setTransponderOn(serializedFleet.getBoolean("isTransponderOn"));
+                serverX = fleet.getLocation().getX();
+                serverY = fleet.getLocation().getY();
+                float deltaX = remoteX - serverX;
+                float deltaY = remoteY - serverY;
+                float distance = (float) Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                fleet.setLocation(remoteX, remoteY);
 
-                if (Math.abs(serverX - fleet.getLocation().x) > 200 || Math.abs(serverY - fleet.getLocation().y) > 200) {
-                    fleet.setLocation(serverX, serverY); // this player fleet is not where it should be by a noticeable margin (+ or -), TP it to the right cords
-                    //200 is arbitrary number, may be adjusted for better results
-                }else{
-                    fleet.setMoveDestination(moveDestinationX,moveDestinationY);//smooth movement
-                }
 
-                LOGGER.log(Level.DEBUG, "Updated fleet for player " + senderPlayerId + " at [" + serverX + ", " + serverY + "] in " + starSystem);
+                LOGGER.log(Level.DEBUG, "Updated fleet for player " + senderPlayerId + " in " + location);
             } else {
                 if (fleet != null) {
                     fleet.despawn();
                 }
-                LOGGER.log(Level.DEBUG, "Fleet not updated for " + senderPlayerId + ": different system (" + starSystem + " vs " + currentSystemName + ")");
+                LOGGER.log(Level.DEBUG, "Fleet not updated for " + senderPlayerId + ": different system (" + location + " vs " + currentSystemName + ")");
             }
         } catch (Exception e) {
             LOGGER.log(Level.ERROR, "Error handling fleet update: " + e.getMessage());
@@ -159,6 +143,7 @@ public class MessageProcessingScript implements EveryFrameScript {
             LOGGER.log(Level.ERROR, "Error handling orbit update: " + e.getMessage());
         }
     }
+
     private void handleStarscapeUpdate(JSONObject data) {
         try {
             if (Objects.equals(MultiplayerModPlugin.getMode(), "server")) {
@@ -170,7 +155,8 @@ public class MessageProcessingScript implements EveryFrameScript {
             LOGGER.log(Level.ERROR, "Error handling starscape update: " + e.getMessage());
         }
     }
-    private void handleHandshake(JSONObject data){
+
+    private void handleHandshake(JSONObject data) {
         try {
             if (Objects.equals(MultiplayerModPlugin.getMode(), "server")) {
                 Server.handleHandshake(data);
@@ -181,7 +167,8 @@ public class MessageProcessingScript implements EveryFrameScript {
             LOGGER.log(Level.ERROR, "Error handling handshake " + e.getMessage());
         }
     }
-    private void handleDisconnect(JSONObject data){
+
+    private void handleDisconnect(JSONObject data) {
         try {
             if (Objects.equals(MultiplayerModPlugin.getMode(), "client")) {
                 Client.handleDisconnect(data);
@@ -191,7 +178,7 @@ public class MessageProcessingScript implements EveryFrameScript {
         }
     }
 
-    private void handleMarketUpdate(JSONObject data){
+    private void handleMarketUpdate(JSONObject data) {
         try {
             if (Objects.equals(MultiplayerModPlugin.getMode(), "server")) {
                 Server.handleMarketUpdateRequest(data.getString("playerId"));
@@ -203,11 +190,11 @@ public class MessageProcessingScript implements EveryFrameScript {
         }
     }
 
-    private void handleCargoPods(JSONObject data){
+    private void handleCargoPods(JSONObject data) {
         try {
             if (Objects.equals(MultiplayerModPlugin.getMode(), "server")) {
                 CargoPodsSync.compareCargoPods(data);
-            }else{
+            } else {
                 CargoHelper.updateLocalPods(data);
             }
         } catch (Exception e) {

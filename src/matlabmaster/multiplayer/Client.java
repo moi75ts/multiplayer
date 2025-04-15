@@ -333,6 +333,17 @@ public class Client implements MessageSender, MessageReceiver {
                 if (industryObject.getBoolean("isDisrupted")) {
                     industry.setDisrupted((float) industryObject.getDouble("distruptedDays"));
                 }
+                if(!Objects.equals(industryObject.getString("aiCoreId"), "multiplayerRemove")){
+                    industry.setAICoreId(industryObject.getString("aiCoreId"));
+                }else {
+                    industry.setAICoreId(null);
+                }
+                if(!Objects.equals(industryObject.getString("specialItemId"), "multiplayerRemove")){
+                    SpecialItemData specialItemData = new SpecialItemData(industryObject.getString("specialItemId"),null);
+                    industry.setSpecialItem(specialItemData);
+                }else {
+                    industry.setSpecialItem(null);
+                }
             }
 
 

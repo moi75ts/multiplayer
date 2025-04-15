@@ -439,6 +439,18 @@ public class Server implements MessageSender, MessageReceiver {
                     industryObject.put("isImproved",industry.isImproved());
                     industryObject.put("isDisrupted",industry.isDisrupted());
                     industryObject.put("distruptedDays",industry.getDisruptedDays());
+                    try {
+                        industryObject.put("specialItemId",industry.getSpecialItem().getId());
+                    }catch (Exception e){
+                        industryObject.put("specialItemId","multiplayerRemove");
+                    }
+                    if(industry.getAICoreId() != null){
+                        industryObject.put("aiCoreId",industry.getAICoreId());
+                    }else{
+                        industryObject.put("aiCoreId","multiplayerRemove");
+                    }
+
+
                     industries.put(industryObject);
                 }
                 marketJson.put("industries",industries);

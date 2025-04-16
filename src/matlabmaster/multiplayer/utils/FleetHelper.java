@@ -7,12 +7,12 @@ import com.fs.starfarer.api.characters.AbilityPlugin;
 import com.fs.starfarer.api.combat.ShipVariantAPI;
 import com.fs.starfarer.api.fleet.FleetMemberAPI;
 import com.fs.starfarer.api.fleet.FleetMemberType;
-import com.fs.starfarer.api.impl.campaign.abilities.TransponderAbility;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.lwjgl.Sys;
 
-import java.awt.print.Book;
+
 import java.util.*;
 
 public class FleetHelper {
@@ -35,11 +35,11 @@ public class FleetHelper {
         serializedFleet.put("moveDestinationY",fleet.getMoveDestination().getY());
         serializedFleet.put("isPlayerFleet",fleet.isPlayerFleet());
         serializedFleet.put("isTransponderOn",fleet.isTransponderOn());
-
+        serializedFleet.put("officers",PersonsHelper.serializePersons(PersonsHelper.extractPersonsFromOfficers(fleet.getFleetData().getOfficersCopy())));
+        serializedFleet.put("commander",PersonsHelper.serializePerson(fleet.getCommander()));
         serializedFleet.put("abilities", serializeAbilities(fleet.getAbilities()));
         serializedFleet.put("cargo",CargoHelper.serializeCargo(fleet.getCargo().getStacksCopy()));
         serializedFleet.put("ships",serializeFleetShips(fleet.getFleetData()));
-        //todo add persons ie commanders
         return serializedFleet;
     }
 
@@ -68,6 +68,9 @@ public class FleetHelper {
         fleet.getCargo().clear();
         CargoHelper.addCargoFromSerialized(serializedFleet.getJSONArray("cargo"), fleet.getCargo());
 
+        // Unserialize officers
+        PersonsHelper.unSerializePersons(serializedFleet.getJSONArray("officers"));
+        PersonsHelper.unSerializePerson(serializedFleet.getJSONObject("commander"));
         // Unserialize ships
         JSONArray ships = serializedFleet.getJSONArray("ships");
         unSerializeFleetMember(ships, fleet);
@@ -128,6 +131,7 @@ public class FleetHelper {
             shipSerialized.put("isMothballed",ship.isMothballed());
             shipSerialized.put("fluxVents",ship.getVariant().getNumFluxVents());
             shipSerialized.put("fluxCapacitors",ship.getVariant().getNumFluxCapacitors());
+            shipSerialized.put("isFlagShip",ship.isFlagship());
             ShipVariantAPI shipVariant = ship.getVariant();
 
             JSONArray hullModsArray = new JSONArray();
@@ -159,6 +163,10 @@ public class FleetHelper {
                 fittedGunsArray.put(gunSlotObject);
             }
             shipSerialized.put("fittedGuns",fittedGunsArray);
+
+            shipSerialized.put("captainId",ship.getCaptain().getId());
+            shipSerialized.put("isAiCore",ship.getCaptain().isAICore());
+            shipSerialized.put("aiCoreId",ship.getCaptain().getAICoreId());
             serializedFleet.put(shipSerialized);
         }
         return serializedFleet;
@@ -177,6 +185,7 @@ public class FleetHelper {
         ship.getRepairTracker().setMothballed(shipObject.getBoolean("isMothballed"));
         ship.getVariant().setNumFluxVents(shipObject.getInt("fluxVents"));
         ship.getVariant().setNumFluxCapacitors(shipObject.getInt("fluxCapacitors"));
+        ship.setFlagship(shipObject.getBoolean("isFlagShip"));
         JSONArray hullMods = shipObject.getJSONArray("hullMods");
         for(i = 0 ; i < hullMods.length() ; i++){
             ship.getVariant().addMod(hullMods.getString(i));
@@ -197,6 +206,16 @@ public class FleetHelper {
             JSONObject fittedGun = fittedGuns.getJSONObject(i);
             ship.getVariant().addWeapon(fittedGun.getString("slotId"),fittedGun.getString("gunId"));
         }
+
+        try {
+            ship.setCaptain(Global.getSector().getImportantPeople().getPerson(shipObject.getString("captainId")));
+        }catch (Exception e){
+            //nothing
+        }
+        if(shipObject.getBoolean("isAiCore")){
+            ship.getCaptain().setAICoreId(shipObject.getString("aiCoreId"));
+        }
+        //todo fix ai core ship
         return ship;
     }
 

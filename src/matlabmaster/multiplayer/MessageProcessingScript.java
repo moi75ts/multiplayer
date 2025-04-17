@@ -98,8 +98,6 @@ public class MessageProcessingScript implements EveryFrameScript {
                     fleet = Global.getFactory().createEmptyFleet("neutral", "WIP", true);
                     assert currentLocation != null;
                     currentLocation.addEntity(fleet);
-                    FleetHelper.unSerializeFleet(serializedFleet,fleet,false);
-                    fleet.setId(senderPlayerId);
                     fleet.setFaction("neutral");
                     fleet.setName("Fleet of " + senderPlayerId);
                 } else {
@@ -108,6 +106,8 @@ public class MessageProcessingScript implements EveryFrameScript {
                         fleet = (CampaignFleetAPI) entity;
                     }
                 }
+                fleet.setId(senderPlayerId);
+                FleetHelper.unSerializeFleet(serializedFleet,fleet,false);
                 fleet.setAI(null);
                 fleet.setMoveDestination(fleet.getLocation().getX(), fleet.getLocation().getY());
                 FleetHelper.unSerializeAbilities(serializedFleet.getJSONArray("abilities"),fleet);
@@ -118,7 +118,6 @@ public class MessageProcessingScript implements EveryFrameScript {
                 float deltaY = remoteY - serverY;
                 float distance = (float) Math.sqrt(deltaX * deltaX + deltaY * deltaY);
                 fleet.setLocation(remoteX, remoteY);
-
 
                 LOGGER.log(Level.DEBUG, "Updated fleet for player " + senderPlayerId + " in " + location);
             } else {

@@ -14,6 +14,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import org.json.JSONException;
 
+import java.security.NoSuchAlgorithmException;
 import java.util.Map;
 
 public class FastUpdateScript implements EveryFrameScript {
@@ -59,6 +60,8 @@ public class FastUpdateScript implements EveryFrameScript {
                 LOGGER.log(Level.DEBUG, "Sent position update for player " + playerId);
             } catch (JSONException e) {
                 LOGGER.log(Level.ERROR, "Failed to construct JSON message: " + e.getMessage());
+            } catch (NoSuchAlgorithmException e) {
+                throw new RuntimeException(e); // shouldn't happen (hash failed)
             }
         }
     }

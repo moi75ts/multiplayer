@@ -174,7 +174,9 @@ public class Client implements MessageSender, MessageReceiver {
                 float angle = (float) objectData.getDouble("a");
                 if (Global.getSector().getEntityById(id) != null) {
                     SectorEntityToken token = Global.getSector().getEntityById(id);
-                    token.setCircularOrbitAngle(angle);
+                    if(!token.isPlayerFleet()) {
+                        token.setCircularOrbitAngle(angle);
+                    }
                 }
             }
         } catch (Exception e) {

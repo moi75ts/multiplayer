@@ -10,13 +10,42 @@ import com.fs.starfarer.api.fleet.FleetMemberType;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.lwjgl.Sys;
 
 
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
 
 public class FleetHelper {
-    public static JSONObject serializeFleet(CampaignFleetAPI fleet) throws JSONException {
+    private static Map<String, Map<String, String>> trackedFleets = new HashMap<>();
+
+    // Method to add or update a fleet entry
+    static public void addOrUpdateTrackedFleet(String id, String shipsHash, String officersHash, String commanderHash, String cargoHash) {
+        Map<String, String> fleet = new HashMap<>();
+        fleet.put("id", id);
+        fleet.put("shipsHash", shipsHash);
+        fleet.put("officersHash", officersHash);
+        fleet.put("commanderHash", commanderHash);
+        fleet.put("cargoHash", cargoHash);
+        trackedFleets.put(id, fleet);
+    }
+
+    // Method to get fleet data by ID
+    static public Map<String, String> getTrackedFleetById(String id) {
+        return trackedFleets.get(id); // Returns null if ID not found
+    }
+
+    // Method to check if an ID exists
+    static public boolean hasTrackedFleet(String id) {
+        return trackedFleets.containsKey(id);
+    }
+
+    // Method to get all fleets
+    static public List<Map<String, String>> getAllTrackedFleets() {
+        return new ArrayList<>(trackedFleets.values());
+    }
+
+
+    public static JSONObject serializeFleet(CampaignFleetAPI fleet) throws JSONException, NoSuchAlgorithmException {
         JSONObject serializedFleet = new JSONObject();
         serializedFleet.put("id",fleet.getId());
         serializedFleet.put("locationX",fleet.getLocation().getX());
@@ -35,11 +64,25 @@ public class FleetHelper {
         serializedFleet.put("moveDestinationY",fleet.getMoveDestination().getY());
         serializedFleet.put("isPlayerFleet",fleet.isPlayerFleet());
         serializedFleet.put("isTransponderOn",fleet.isTransponderOn());
-        serializedFleet.put("officers",PersonsHelper.serializePersons(PersonsHelper.extractPersonsFromOfficers(fleet.getFleetData().getOfficersCopy())));
-        serializedFleet.put("commander",PersonsHelper.serializePerson(fleet.getCommander()));
-        serializedFleet.put("abilities", serializeAbilities(fleet.getAbilities()));
-        serializedFleet.put("cargo",CargoHelper.serializeCargo(fleet.getCargo().getStacksCopy()));
-        serializedFleet.put("ships",serializeFleetShips(fleet.getFleetData()));
+
+        serializedFleet.put("abilities", serializeAbilities(fleet.getAbilities()));// no need for hash, apply
+
+        JSONArray serializedOfficers = PersonsHelper.serializePersons(PersonsHelper.extractPersonsFromOfficers(fleet.getFleetData().getOfficersCopy()));
+        serializedFleet.put("officers", serializedOfficers);
+        serializedFleet.put("officersHash",hashHelper.hashJsonArray(serializedOfficers));
+
+        JSONObject serializedCommander = PersonsHelper.serializePerson(fleet.getCommander());
+        serializedFleet.put("commander", serializedCommander);
+        serializedFleet.put("commanderHash",hashHelper.hashJsonObject(serializedCommander));
+
+
+        JSONArray serializedCargo = CargoHelper.serializeCargo(fleet.getCargo().getStacksCopy());
+        serializedFleet.put("cargo",serializedCargo);
+        serializedFleet.put("cargoHash",hashHelper.hashJsonArray(serializedCargo));
+
+        JSONArray serializedShips = serializeFleetShips(fleet.getFleetData());
+        serializedFleet.put("ships", serializedShips);
+        serializedFleet.put("shipsHash",hashHelper.hashJsonArray(serializedShips));
         return serializedFleet;
     }
 
@@ -51,6 +94,7 @@ public class FleetHelper {
      * @throws JSONException If JSON parsing fails
      */
     public static void unSerializeFleet(JSONObject serializedFleet, CampaignFleetAPI fleet, boolean moveDestination) throws JSONException {
+        Map<String,String> trackedData;
         fleet.setId(serializedFleet.getString("id"));
         fleet.getLocation().set((float)serializedFleet.getDouble("locationX"), (float) serializedFleet.getDouble("locationY"));
         fleet.setFaction(serializedFleet.getString("factionId"));
@@ -64,18 +108,51 @@ public class FleetHelper {
         JSONArray abilities = serializedFleet.getJSONArray("abilities");
         unSerializeAbilities(abilities, fleet);
 
-        // Unserialize cargo
-        fleet.getCargo().clear();
-        CargoHelper.addCargoFromSerialized(serializedFleet.getJSONArray("cargo"), fleet.getCargo());
+        if(hasTrackedFleet(serializedFleet.getString("id"))){
+            //fleet exists and is tracked (tracking is used for updating the fleet)
+            trackedData = getTrackedFleetById(serializedFleet.getString("id"));
+            if(!Objects.equals(serializedFleet.getString("officersHash"), trackedData.get("officersHash"))){
+                PersonsHelper.unSerializePersons(serializedFleet.getJSONArray("officers"));
+            }
+            if(!Objects.equals(serializedFleet.getString("commanderHash"), trackedData.get("commanderHash"))){
+                PersonsHelper.unSerializePerson(serializedFleet.getJSONObject("commander"));
+            }
+            if(!Objects.equals(serializedFleet.getString("cargoHash"), trackedData.get("cargoHash"))){
+                fleet.getCargo().clear();
+                CargoHelper.addCargoFromSerialized(serializedFleet.getJSONArray("cargo"), fleet.getCargo());
+            }
 
-        // Unserialize officers
-        PersonsHelper.unSerializePersons(serializedFleet.getJSONArray("officers"));
-        PersonsHelper.unSerializePerson(serializedFleet.getJSONObject("commander"));
-        // Unserialize ships
-        JSONArray ships = serializedFleet.getJSONArray("ships");
-        unSerializeFleetMember(ships, fleet);
-        
-        //todo add persons ie commanders when implemented in serialize
+            if(!Objects.equals(serializedFleet.getString("shipsHash"), trackedData.get("shipsHash"))){
+                clearFleetMembers(fleet);
+                JSONArray ships = serializedFleet.getJSONArray("ships");
+                unSerializeFleetMember(ships, fleet);
+            }
+
+            addOrUpdateTrackedFleet(
+                    serializedFleet.getString("id"),
+                    serializedFleet.getString("shipsHash"),
+                    serializedFleet.getString("officersHash"),
+                    serializedFleet.getString("commanderHash"),
+                    serializedFleet.getString("cargoHash")
+            );
+        }else{
+            //fleet is not tracked, usually at spawn
+            PersonsHelper.unSerializePersons(serializedFleet.getJSONArray("officers"));
+            PersonsHelper.unSerializePerson(serializedFleet.getJSONObject("commander"));
+            fleet.getCargo().clear();
+            CargoHelper.addCargoFromSerialized(serializedFleet.getJSONArray("cargo"), fleet.getCargo());
+            clearFleetMembers(fleet);
+            JSONArray ships = serializedFleet.getJSONArray("ships");
+            unSerializeFleetMember(ships, fleet);
+
+            addOrUpdateTrackedFleet(
+                    serializedFleet.getString("id"),
+                    serializedFleet.getString("shipsHash"),
+                    serializedFleet.getString("officersHash"),
+                    serializedFleet.getString("commanderHash"),
+                    serializedFleet.getString("cargoHash")
+            );
+        }
     }
 
     public static JSONArray serializeAbilities(Map<String, AbilityPlugin> abilities) throws JSONException {
@@ -237,4 +314,9 @@ public class FleetHelper {
 
     }
 
+    public static void clearFleetMembers(CampaignFleetAPI fleet){
+        for(FleetMemberAPI ship : fleet.getFleetData().getMembersListWithFightersCopy()){
+            fleet.getFleetData().removeFleetMember(ship);
+        }
+    }
 }

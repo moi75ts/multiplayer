@@ -116,7 +116,6 @@ public class Server implements MessageSender, MessageReceiver {
         @Override
         public void run() {
             try {
-                // First message should be the user ID
                 userId = in.readLine();
                 if (userId != null) {
                     clients.put(userId, this);
@@ -125,7 +124,6 @@ public class Server implements MessageSender, MessageReceiver {
 
                 String message;
                 while ((message = in.readLine()) != null) {
-                    // Handle incoming messages
                     messageHandler.onMessageReceived(message);
                 }
             } catch (IOException e) {
@@ -222,7 +220,6 @@ public class Server implements MessageSender, MessageReceiver {
                 JSONArray toSync = new JSONArray();
                 for (SectorEntityToken entity : stableLocations) {
                     if (entity.getCustomEntityType() == "orbital_junk" || entity.getCustomEntityType() == "null") {
-                        // don't sync useless / not important
                     } else {
                         JSONObject thing = new JSONObject();
                         thing.put("id", entity.getId());
@@ -321,7 +318,7 @@ public class Server implements MessageSender, MessageReceiver {
         JSONArray clientModlist = data.getJSONArray("modList");
         String clientGameVersion = data.getString("gameVersion");
         JSONArray modList = new JSONArray();
-        for(ModPlugin mod : Global.getSettings().getModManager().getEnabledModPlugins()){
+        for (ModPlugin mod : Global.getSettings().getModManager().getEnabledModPlugins()) {
             modList.put(mod.getClass().getName());
         }
 
@@ -330,14 +327,12 @@ public class Server implements MessageSender, MessageReceiver {
             return;
         }
 
-        // Get the client handler directly from the clients map
         ClientHandler targetConnection = serverInstance.clients.get(clientPlayerId);
         if (targetConnection != null) {
             clientIp = targetConnection.socket.getInetAddress().getHostAddress();
         }
 
-        if(!Objects.equals(clientModlist.toString(), modList.toString())){
-            //TODO find a way to check if mod versions are identical
+        if (!Objects.equals(clientModlist.toString(), modList.toString())) {
             if (targetConnection != null) {
                 serverInstance.disconnectClient(targetConnection, "mod mismatch, please install following mods then reconnect : " + modList, Global.getSector().getSeedString());
             }
@@ -346,7 +341,7 @@ public class Server implements MessageSender, MessageReceiver {
         }
         networkWindow.getMessageField().append("Client " + clientPlayerId + " mod matching, continue\n");
 
-        if(!Objects.equals(clientGameVersion, getSettings().getVersionString())){
+        if (!Objects.equals(clientGameVersion, getSettings().getVersionString())) {
             if (targetConnection != null) {
                 serverInstance.disconnectClient(targetConnection, "game Version mismatch: " + getSettings().getVersionString(), getSettings().getVersionString());
             }
@@ -376,116 +371,6 @@ public class Server implements MessageSender, MessageReceiver {
         }
     }
 
-    public static void handleMarketUpdateRequest(String playerId) throws JSONException {
-        JSONObject message = new JSONObject();
-        message.put("playerId","server");
-        message.put("command",2);
-        EconomyAPI economy = Global.getSector().getEconomy();
-        JSONArray markets = new JSONArray();
-        List<LocationAPI> systemsWithMarkets = economy.getLocationsWithMarkets();
-        for (LocationAPI systemWithMarkets : systemsWithMarkets){
-            for (MarketAPI market: economy.getMarkets(systemWithMarkets)){
-                JSONObject marketJson = new JSONObject();
-                //Stability cannot be set since it is calculated from various conditions
-                if(market.isPlayerOwned()){
-                    marketJson.put("ownerFactionId","player");
-                }else{
-                    marketJson.put("ownerFactionId",market.getFactionId());
-                }
-                marketJson.put("marketId", market.getId());
-                marketJson.put("name", market.getName());
-                marketJson.put("marketSize",market.getSize());
-                marketJson.put("isFreePort", market.isFreePort());
-                marketJson.put("hasSpaceport", market.hasSpaceport());
-                marketJson.put("hasWaystation", market.hasWaystation());
-                marketJson.put("primaryEntity",market.getPrimaryEntity().getId());
-                marketJson.put("primaryEntityx",market.getLocation().x);
-                marketJson.put("primaryEntityy",market.getLocation().y);
-                marketJson.put("marketSystem",market.getStarSystem().getId());
-                marketJson.put("isHidden",market.isHidden());
-
-                JSONArray connectedEntities = new JSONArray();
-                Set<SectorEntityToken> connectedClientEntities = market.getConnectedEntities();
-                for(SectorEntityToken entity : connectedClientEntities){
-                    JSONObject entityObject = new JSONObject();
-                    entityObject.put("EntityID",entity.getId());
-                    entityObject.put("locationx",entity.getLocation().x);
-                    entityObject.put("locationy",entity.getLocation().y);
-                    entityObject.put("entityName",entity.getName());
-                    entityObject.put("orbitAngle",entity.getCircularOrbitAngle());
-                    entityObject.put("orbitPeriod",entity.getCircularOrbitPeriod());
-                    entityObject.put("orbitRadius",entity.getCircularOrbitRadius());
-                    entityObject.put("entityOrbitFocusId", entity.getOrbit().getFocus().getId());
-                    connectedEntities.put(entityObject);
-                }
-                marketJson.put("connectedEntities",connectedEntities);
-
-
-                JSONArray conditions = new JSONArray();
-                List<MarketConditionAPI> conditionsList = market.getConditions();
-                for(MarketConditionAPI condition : conditionsList){
-                    if(!Objects.equals(condition.getId(), "pather_cells") && !Objects.equals(condition.getId(), "pirate_activity")){                //todo fix pather cells && pirate activities
-                        conditions.put(condition.getId());                                                                                                //both pirate and pather activity require pirate / pather intel object, which seems like a pain to implement
-                    }                                                                                                                                     //so since I cannot be bothered they get removed client, side then the client readds them if needed, i you try to push these 2 conditions the client will crash
-
-                }
-                marketJson.put("conditions",conditions);
-
-                JSONArray industries = new JSONArray();
-                List<Industry> industriesList = market.getIndustries();
-                for(Industry industry : industriesList){
-                    JSONObject industryObject = new JSONObject();
-                    industryObject.put("industryId",industry.getId());
-                    industryObject.put("isImproved",industry.isImproved());
-                    industryObject.put("isDisrupted",industry.isDisrupted());
-                    industryObject.put("distruptedDays",industry.getDisruptedDays());
-                    try {
-                        industryObject.put("specialItemId",industry.getSpecialItem().getId());
-                    }catch (Exception e){
-                        industryObject.put("specialItemId","multiplayerRemove");
-                    }
-                    if(industry.getAICoreId() != null){
-                        industryObject.put("aiCoreId",industry.getAICoreId());
-                    }else{
-                        industryObject.put("aiCoreId","multiplayerRemove");
-                    }
-
-
-                    industries.put(industryObject);
-                }
-                marketJson.put("industries",industries);
-
-                JSONArray subMarkets = new JSONArray();
-                List<SubmarketAPI> submarketList = market.getSubmarketsCopy();
-                for(SubmarketAPI submarket : submarketList){
-                    if(Objects.equals(submarket.getSpecId(), "storage")){
-                        continue;
-                    }//do not sync storage
-                    JSONObject submarketObject = new JSONObject();
-                    submarketObject.put("submarketSpecId",submarket.getSpecId());
-                    submarketObject.put("submarketFaction",submarket.getFaction().getId());
-
-                    //general subMarkets things done, do cargo
-                    CargoAPI cargo = submarket.getCargo();
-                    //Ships
-                    JSONArray ships = FleetHelper.serializeFleetShips(cargo.getMothballedShips());
-                    submarketObject.put("ships",ships);
-                    //commodities
-                    List<CargoStackAPI> cargoStacks = cargo.getStacksCopy();
-                    JSONArray commodities = CargoHelper.serializeCargo(cargoStacks);
-                    submarketObject.put("commodities",commodities);
-                    subMarkets.put(submarketObject);
-                }
-                marketJson.put("subMarkets",subMarkets);
-                markets.put(marketJson);
-            }
-        }
-         message.put("markets",markets);
-        Server serverInstance = (Server) MultiplayerModPlugin.getMessageSender();
-        serverInstance.sendMessage(message.toString());
-        serverInstance.replyTo(message.toString(), playerId);
-    }
-
     private void disconnectClient(ClientHandler connection, String reason, String seed) {
         synchronized (clients) {
             if (connection != null && clients.containsValue(connection)) {
@@ -499,7 +384,7 @@ public class Server implements MessageSender, MessageReceiver {
                     connection.close();
                     LOGGER.log(Level.INFO, "Disconnected client " + connection.userId + " (" +
                             connection.socket.getInetAddress() + ") due to " + reason);
-                    onLeave(connection);  // Call onLeave when explicitly disconnecting
+                    onLeave(connection);
                 } catch (JSONException e) {
                     LOGGER.log(Level.ERROR, "Error disconnecting client " + connection.userId + ": " + e.getMessage());
                 }
@@ -507,14 +392,13 @@ public class Server implements MessageSender, MessageReceiver {
         }
     }
 
-    // New onLeave method
     private void onLeave(ClientHandler connection) {
         if (connection != null && connection.userId != null) {
             LOGGER.log(Level.INFO, "Player " + connection.userId + " has left the server");
             if (networkWindow != null && networkWindow.getMessageField() != null) {
                 networkWindow.getMessageField().append("Player " + connection.userId + " has left\n");
             }
-            removePlayerFleet(connection.userId);  // Example usage: remove the fleet
+            removePlayerFleet(connection.userId);
         }
     }
 

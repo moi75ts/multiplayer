@@ -74,7 +74,6 @@ public class CargoHelper {
                 cargo.addWeapons(cargoToAdd.getString("weaponId"), cargoToAdd.getInt("quantity"));
             } else if (Objects.equals(cargoToAdd.getString("type"), "FIGHTER_CHIP")) {
                 cargo.addFighters(cargoToAdd.getString("fighterId"), cargoToAdd.getInt("quantity"));
-                //todo fighter chips
             } else if (Objects.equals(cargoToAdd.getString("type"), "SPECIAL")) {
                 String specialData;
                 try {
@@ -182,9 +181,7 @@ public class CargoHelper {
     public static void clearCargo(CargoAPI cargo) {
         List<CargoStackAPI> cargoStacks = cargo.getStacksCopy();
         for (CargoStackAPI cargoStack : cargoStacks) {
-            if (cargoStack.getHullModSpecIfHullMod() == null) { //important do not remove clear hullmods, otherwise in markets once the server has all the hull mods no other can spawn
-                cargoStack.setSize(0);
-            }
+            cargoStack.setSize(0);
         }
         cargo.removeEmptyStacks();
     }

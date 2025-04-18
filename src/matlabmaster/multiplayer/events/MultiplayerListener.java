@@ -6,8 +6,11 @@ import com.fs.starfarer.api.characters.AbilityPlugin;
 import com.fs.starfarer.api.characters.PersonAPI;
 import com.fs.starfarer.api.combat.EngagementResultAPI;
 import com.fs.starfarer.api.fleet.FleetMemberAPI;
+import matlabmaster.multiplayer.utils.MarketUpdateHelper;
+import org.json.JSONException;
 import org.lwjgl.Sys;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class MultiplayerListener implements CampaignEventListener {
@@ -19,7 +22,14 @@ public class MultiplayerListener implements CampaignEventListener {
 
     @Override
     public void reportPlayerClosedMarket(MarketAPI market) {
-
+        List<MarketAPI> listOfMarketsToUpdate = new ArrayList<>();
+        listOfMarketsToUpdate.add(market);
+        try {
+            System.out.println("send market update for market " + market.getId());
+            MarketUpdateHelper.sendMarketUpdate(listOfMarketsToUpdate);
+        } catch (JSONException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override

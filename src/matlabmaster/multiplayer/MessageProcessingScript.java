@@ -12,10 +12,12 @@ import com.fs.starfarer.api.fleet.FleetMemberType;
 import matlabmaster.multiplayer.SlowUpdates.CargoPodsSync;
 import matlabmaster.multiplayer.utils.CargoHelper;
 import matlabmaster.multiplayer.utils.FleetHelper;
+import matlabmaster.multiplayer.utils.MarketUpdateHelper;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.log4j.LogManager;
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.Objects;
@@ -57,18 +59,21 @@ public class MessageProcessingScript implements EveryFrameScript {
                         handleDisconnect(data);
                         break;
                     case 2:
+                        handleMarketUpdateRequest(data);
+                        break;
+                    case 3:
                         handleMarketUpdate(data);
                         break;
                     case 4:
                         handleStarscapeUpdate(data);
                         break;
-                    case 5: // Fleet position update
+                    case 5:
                         handleFleetUpdate(data);
                         break;
-                    case 6: // Orbiting bodies update
+                    case 6:
                         handeOrbitUpdate(data);
                         break;
-                    case 7:// cargopods check
+                    case 7:
                         handleCargoPods(data);
                         break;
                     default:
@@ -91,7 +96,7 @@ public class MessageProcessingScript implements EveryFrameScript {
             float serverY = 0;
             float remoteX = (float) serializedFleet.getDouble("locationX");
             float remoteY = (float) serializedFleet.getDouble("locationY");
-            String currentSystemName = currentLocation != null ? currentLocation.getName() : "";//??
+            String currentSystemName = currentLocation != null ? currentLocation.getName() : "";
             CampaignFleetAPI fleet = (CampaignFleetAPI) sector.getEntityById(serializedFleet.getString("id"));
             if (Objects.equals(location.toLowerCase(), currentSystemName.toLowerCase())) {
                 if (fleet == null) {
@@ -107,10 +112,10 @@ public class MessageProcessingScript implements EveryFrameScript {
                     }
                 }
                 fleet.setId(senderPlayerId);
-                FleetHelper.unSerializeFleet(serializedFleet,fleet,false);
+                FleetHelper.unSerializeFleet(serializedFleet, fleet, false);
                 fleet.setAI(null);
                 fleet.setMoveDestination(fleet.getLocation().getX(), fleet.getLocation().getY());
-                FleetHelper.unSerializeAbilities(serializedFleet.getJSONArray("abilities"),fleet);
+                FleetHelper.unSerializeAbilities(serializedFleet.getJSONArray("abilities"), fleet);
                 fleet.setTransponderOn(serializedFleet.getBoolean("isTransponderOn"));
                 serverX = fleet.getLocation().getX();
                 serverY = fleet.getLocation().getY();
@@ -177,15 +182,14 @@ public class MessageProcessingScript implements EveryFrameScript {
         }
     }
 
-    private void handleMarketUpdate(JSONObject data) {
-        try {
-            if (Objects.equals(MultiplayerModPlugin.getMode(), "server")) {
-                Server.handleMarketUpdateRequest(data.getString("playerId"));
-            } else {
-                Client.handleMarketUpdate(data);
-            }
-        } catch (Exception e) {
-            LOGGER.log(Level.ERROR, "Error handling marketUpdate " + e.getMessage());
+    private void handleMarketUpdate(JSONObject data) throws JSONException {
+        String senderPlayerId = data.getString("playerId");
+        if (Objects.equals(MultiplayerModPlugin.getMode(), "server")) {
+            MarketUpdateHelper.handleMarketUpdate(data);
+            Server serverInstance = (Server) MultiplayerModPlugin.getMessageSender();
+            serverInstance.sendToEveryoneBut(senderPlayerId, data.toString());
+        } else {
+            MarketUpdateHelper.handleMarketUpdate(data);
         }
     }
 
@@ -197,7 +201,15 @@ public class MessageProcessingScript implements EveryFrameScript {
                 CargoHelper.updateLocalPods(data);
             }
         } catch (Exception e) {
-            LOGGER.log(Level.ERROR, "Error handling cargo pods check " + e.getMessage());
+            LOGGER.log(Level.ERROR, "Error handling cargo pods check: " + e.getMessage());
+        }
+    }
+
+    private void handleMarketUpdateRequest(JSONObject data) {
+        try {
+            MarketUpdateHelper.handleMarketUpdateRequest(data.getString("playerId"));
+        } catch (Exception e) {
+            LOGGER.log(Level.ERROR, "Error handling marketUpdate request " + e.getMessage());
         }
     }
 }

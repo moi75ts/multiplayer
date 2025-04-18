@@ -5,6 +5,7 @@ import com.fs.starfarer.api.Global;
 import matlabmaster.multiplayer.Client;
 import matlabmaster.multiplayer.SlowUpdates.CargoPodsSync;
 import matlabmaster.multiplayer.requests.StarSystemSync;
+import matlabmaster.multiplayer.utils.MarketUpdateHelper;
 import org.json.JSONException;
 
 public class UnpauseScript implements EveryFrameScript {
@@ -28,7 +29,7 @@ public class UnpauseScript implements EveryFrameScript {
             if(!Global.getSector().getCurrentLocation().isHyperspace()){
                 StarSystemSync.orbitUpdateRequest();
                 try {
-                    Client.requestMarketUpdate();
+                    MarketUpdateHelper.requestMarketUpdate();
                 } catch (JSONException e) {
                     throw new RuntimeException(e);
                 }

@@ -92,7 +92,7 @@ public class MessageProcessingScript implements EveryFrameScript {
             float remoteX = (float) serializedFleet.getDouble("locationX");
             float remoteY = (float) serializedFleet.getDouble("locationY");
             String currentSystemName = currentLocation != null ? currentLocation.getName() : "";//??
-            CampaignFleetAPI fleet = (CampaignFleetAPI) sector.getEntityById(senderPlayerId);
+            CampaignFleetAPI fleet = (CampaignFleetAPI) sector.getEntityById(serializedFleet.getString("id"));
             if (Objects.equals(location.toLowerCase(), currentSystemName.toLowerCase())) {
                 if (fleet == null) {
                     fleet = Global.getFactory().createEmptyFleet("neutral", "WIP", true);
@@ -101,7 +101,7 @@ public class MessageProcessingScript implements EveryFrameScript {
                     fleet.setFaction("neutral");
                     fleet.setName("Fleet of " + senderPlayerId);
                 } else {
-                    SectorEntityToken entity = Global.getSector().getEntityById(senderPlayerId);
+                    SectorEntityToken entity = Global.getSector().getEntityById(serializedFleet.getString("id"));
                     if (entity instanceof CampaignFleetAPI) {
                         fleet = (CampaignFleetAPI) entity;
                     }

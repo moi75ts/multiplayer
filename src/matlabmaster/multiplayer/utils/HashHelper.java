@@ -7,7 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
-public class hashHelper {
+public class HashHelper {
     public static String hashJsonObject(JSONObject object) throws NoSuchAlgorithmException {
         String jsonString = object.toString();
         MessageDigest digest = MessageDigest.getInstance("md5");

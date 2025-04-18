@@ -64,25 +64,32 @@ public class FleetHelper {
         serializedFleet.put("moveDestinationY",fleet.getMoveDestination().getY());
         serializedFleet.put("isPlayerFleet",fleet.isPlayerFleet());
         serializedFleet.put("isTransponderOn",fleet.isTransponderOn());
+        serializedFleet.put("maxBurnLevel",fleet.getFleetData().getBurnLevel());
 
         serializedFleet.put("abilities", serializeAbilities(fleet.getAbilities()));// no need for hash, apply
 
         JSONArray serializedOfficers = PersonsHelper.serializePersons(PersonsHelper.extractPersonsFromOfficers(fleet.getFleetData().getOfficersCopy()));
         serializedFleet.put("officers", serializedOfficers);
-        serializedFleet.put("officersHash",hashHelper.hashJsonArray(serializedOfficers));
+        serializedFleet.put("officersHash", HashHelper.hashJsonArray(serializedOfficers));
 
         JSONObject serializedCommander = PersonsHelper.serializePerson(fleet.getCommander());
         serializedFleet.put("commander", serializedCommander);
-        serializedFleet.put("commanderHash",hashHelper.hashJsonObject(serializedCommander));
+        serializedFleet.put("commanderHash", HashHelper.hashJsonObject(serializedCommander));
 
 
         JSONArray serializedCargo = CargoHelper.serializeCargo(fleet.getCargo().getStacksCopy());
         serializedFleet.put("cargo",serializedCargo);
-        serializedFleet.put("cargoHash",hashHelper.hashJsonArray(serializedCargo));
+        serializedFleet.put("cargoHash", HashHelper.hashJsonArray(serializedCargo));
 
         JSONArray serializedShips = serializeFleetShips(fleet.getFleetData());
         serializedFleet.put("ships", serializedShips);
-        serializedFleet.put("shipsHash",hashHelper.hashJsonArray(serializedShips));
+        serializedFleet.put("shipsHash", hashFleetWithoutCombatReadiness(serializedShips));
+
+        //Combat readiness change constantly when a ship is recuperating
+        //which means that every single tick the fleet is destroyed and remade to update one ship CR
+        //So I excluded it from the hash,
+        //the fix would be instead of deleting then remaking the fleet everytime the fleet changes, to only update what needs updating using existing ships
+        //todo fix it
         return serializedFleet;
     }
 
@@ -153,6 +160,25 @@ public class FleetHelper {
                     serializedFleet.getString("cargoHash")
             );
         }
+
+        //the burn code was birthed in pain
+        //the base fleet burn is 4, 8 if ability is used
+        //there is no setBurn method
+        //So I just take the local and remote burn value, compare them
+        //it goes
+        //remoteMaxBurn-localMaxBurn how much the burn level should increase / decrease by
+        //+ localMaxBurn the current burn level
+        //-minus the base value (baseFleetBurn)
+        //the value is then fed into fleet.getStats().getFleetwideMaxBurnMod().modifyFlat("sync",burnBonus); which sets the correct burn level
+        float remoteMaxBurn = (float) serializedFleet.getDouble("maxBurnLevel");
+        float localMaxBurn = fleet.getFleetData().getBurnLevel();
+        float baseFleetBurn = 4;
+        if(isAbilityBeingUsed("sustained_burn",fleet) || isAbilityBeingUsed("emergency_burn",fleet)){
+            baseFleetBurn = 8;
+        }
+        float burnBonus = remoteMaxBurn-localMaxBurn + localMaxBurn - baseFleetBurn;
+        fleet.getStats().getFleetwideMaxBurnMod().modifyFlat("sync",burnBonus);
+
     }
 
     public static JSONArray serializeAbilities(Map<String, AbilityPlugin> abilities) throws JSONException {
@@ -318,5 +344,20 @@ public class FleetHelper {
         for(FleetMemberAPI ship : fleet.getFleetData().getMembersListWithFightersCopy()){
             fleet.getFleetData().removeFleetMember(ship);
         }
+    }
+
+    public static String hashFleetWithoutCombatReadiness(JSONArray serializedShips) throws JSONException, NoSuchAlgorithmException {
+        JSONArray modifiedShips = new JSONArray();
+        for (int i = 0; i < serializedShips.length(); i++) {
+            JSONObject ship = serializedShips.getJSONObject(i);
+            JSONObject modifiedShip = new JSONObject(ship.toString()); // Deep copy
+            modifiedShip.remove("combatReadiness"); // Remove the key
+            modifiedShips.put(modifiedShip);
+        }
+        return HashHelper.hashJsonArray(modifiedShips);
+    }
+
+    public static Boolean isAbilityBeingUsed(String abilityID,CampaignFleetAPI fleet){
+        return fleet.getAbility(abilityID).isActiveOrInProgress();
     }
 }

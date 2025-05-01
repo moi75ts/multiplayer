@@ -1,82 +1,85 @@
 # Starsector Multiplayer Mod
 
-
 ## Description
 
-This is a simple, experimental multiplayer for the game Starsector
+This is an experimental multiplayer mod for *Starsector*, built using a client-server architecture. The server maintains the definitive game world state, and clients can update the server through their actions, synchronizing changes across all connected clients.
 
-It uses a client / server architecture, where the server has the definitive state of the game world, the client through their actions can update the server, so that their changes are reflected to all other clients
+This is my first attempt at Java programming and game modding, so expect bugs and rough edges. I created this mod primarily as a proof of concept. Updates may be infrequent, but you are welcome to fork or contribute to the project.
 
-This is my first JAVA / modding a game, so there is / will be a lot of bugs, I mainly made this mod to prove that it could be done.
+## AI Disclaimer
 
-As such do not expect regular updates, however feel free to fork / contribute to this project.
+Portions of this codebase were written with assistance from large language models (LLMs).
 
-## AI disclamer
+## License
 
-Some parts / portions of this codebase was written by / with the help of LLMs
+This software is free and unencumbered, released with the following conditions:
 
-## LICENSE
+Anyone may copy, modify, publish, use, or distribute this software, in source code or compiled binary form, for any purpose, including commercial use, subject to these restrictions:
 
-This is free and unencumbered software released with the following conditions:
+- You may not sell this software as-is.
+- You may not misrepresent the origin of this software or claim authorship or exclusive rights to the original work.
+- Attribution is appreciated but not required.
 
-Anyone is free to copy, modify, publish, use, or distribute this software, either in source code form or as a compiled binary, for any purpose, including commercial use, with the following restrictions:
+To the extent permitted by law, the author(s) dedicate all copyright interest in the software to the public domain, subject to the above restrictions.
 
-    You may not sell this software as-is.
+**Disclaimer**: The software is provided "as is," without any warranty, express or implied, including but not limited to merchantability, fitness for a particular purpose, or non-infringement. The authors are not liable for any claims, damages, or liabilities arising from the use of or dealings with the software.
 
-    You may not misrepresent the origin of this software. You must not claim authorship or exclusive rights to the original software.
-
-    Attribution is not required, but is appreciated.
-
-In jurisdictions that recognize copyright laws, the author(s) of this software dedicate any and all copyright interest in the software to the public domain, to the extent allowed by law, and subject to the above restrictions.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ## Prerequisites
 
-this is a standalone mod, you do not need any other mods / libraries to make it work
+This is a standalone mod requiring no additional mods or libraries.
 
-When you connect to a server both seeds must match.
-If you create a new game with `devmode` on, the map generation will not take the seed into account. DO NOT START A NEW GAME WITH DEVMODE ON.
+**Important**: When connecting to a server, the game seed must match. If you start a new game with `devmode` enabled, map generation ignores the seed. **Do not start a new game with devmode enabled.**
 
-## how to create / join a game
-When the game loads a new separate window will appear
-![Alt text](https://i.imgur.com/FxQQhUh.png)
-from this window you can set the ip address to connect to
-you can also set your username that will be visible over your fleet
-when you are in server mode, connect will start the server
+## How to Create or Join a Game
 
-for a client to join the game all the following must match
-- game version
-- mod list
-- game seed
+Upon launching the game, a separate window will appear:
 
-if you do not know the seed trying to connect will give you the right seed, you can copy it using the `copy` button in the ui
-![both client and server connexions windows](https://i.imgur.com/ZJ5M9Nk.png)
+![Connection Window](https://i.imgur.com/FxQQhUh.png)
 
-## FAQ
+In this window, you can:
+- Set the IP address to connect to.
+- Choose a username, which will be displayed above your fleet.
+- Start a server by clicking "Connect" in server mode.
 
-### What works
-- You can see other players fleet along with their fleet composition / weapons / officers
-![Moving around](https://i.imgur.com/9CBtYOZ.gif)
-- you can affect markets via trades / military actions / creating a colony / destroying a colony
-![sold 5 things to market, he then bought them](https://i.imgur.com/kJUCHrH.gif)
-- you can drop cargo pods and have another player pick them back up
-![picking up Cargo](https://i.imgur.com/TrFQ7k3.gif)
-### What doesn't work / exist yet
+To join a game as a client, the following must match:
+- Game version
+- Mod list
+- Game seed
 
-- no combat
-- no ai fleet
-- no missions
-- the games must be started with the same seed, in the future  you ideally would not need to do that
-- fleet position rubber banding (acceleration issue)
+If you don't know the seed, attempting to connect will display the correct seed. You can copy it using the "Copy" button in the UI:
+
+![Client and Server Connection Windows](https://i.imgur.com/ZJ5M9Nk.png)
+
+## Features
+
+### What Works
+- View other players' fleets, including composition, weapons, and officers:
+
+  ![Moving Around](https://i.imgur.com/9CBtYOZ.gif)
+
+- Affect markets through trading, military actions, founding colonies, or destroying colonies:
+
+  ![Market Interaction](https://i.imgur.com/kJUCHrH.gif)
+
+- Drop cargo pods for other players to pick up:
+
+  ![Cargo Pickup](https://i.imgur.com/TrFQ7k3.gif)
+
+### What Doesn't Work (Yet)
+- No combat.
+- No AI fleets.
+- No missions.
+- Games must start with the same seed (future updates may remove this requirement).
+- Fleet position rubberbanding due to acceleration issues.
 
 ## Troubleshooting
 
-- The planets are not in the same positions -> try to pause / un-pause the game
-- check the UI if you are still connected to the server
-- I do not see the other person fleet, or it keeps disappearing -> change fleet composition / order
+- **Planets are misaligned**: Try pausing and unpausing the game.
+- **Disconnected from server**: Check the UI to confirm your connection status.
+- **Other player's fleet is invisible or disappears**: Modify your fleet composition or order.
 
-## Other
+## Credits
 
-Author: MatlabMaster
+**Author**: MatlabMaster
 
-This was made possible thanks to the many community provided resources like wiki, other open sourced mods, and the offical starfarer API 
+This mod was made possible thanks to community resources, including the *Starsector* wiki, open-source mods, and the official Starfarer API.

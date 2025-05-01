@@ -1,240 +1,82 @@
-# Starsector IntelliJ Mod Template
+# Starsector Multiplayer Mod
 
-v1.0.1
 
 ## Description
 
-This is a template for a generic Starsector mod using Java.
+This is a simple, experimental multiplayer for the game Starsector
 
-When you are done, you will have a mod that does nothing, but is ready for anything to be added.
+It uses a client / server architecture, where the server has the definitive state of the game world, the client through their actions can update the server, so that their changes are reflected to all other clients
 
-Written for IntelliJ Community ([free download](https://www.jetbrains.com/idea/download)), but should work with any IDE.
-You do NOT need IntelliJ Ultimate. Latest version of IntelliJ is 2024.3 as of writing.
+This is my first JAVA / modding a game, so there is / will be a lot of bugs, I mainly made this mod to prove that it could be done.
 
-## Optional
+As such do not expect regular updates, however feel free to fork / contribute to this project.
 
-- Change `LICENSE` to something else.
+## AI disclamer
 
-## Initial
+Some parts / portions of this codebase was written by / with the help of LLMs
 
-Do not use mod with devMode on
+## LICENSE
+
+This is free and unencumbered software released with the following conditions:
+
+Anyone is free to copy, modify, publish, use, or distribute this software, either in source code form or as a compiled binary, for any purpose, including commercial use, with the following restrictions:
+
+    You may not sell this software as-is.
+
+    You may not misrepresent the origin of this software. You must not claim authorship or exclusive rights to the original software.
+
+    Attribution is not required, but is appreciated.
+
+In jurisdictions that recognize copyright laws, the author(s) of this software dedicate any and all copyright interest in the software to the public domain, to the extent allowed by law, and subject to the above restrictions.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+## Prerequisites
+
+this is a standalone mod, you do not need any other mods / libraries to make it work
+
+When you connect to a server both seeds must match.
+If you create a new game with `devmode` on, the map generation will not take the seed into account. DO NOT START A NEW GAME WITH DEVMODE ON.
+
+## how to create / join a game
+When the game loads a new separate window will appear
+![Alt text](https://i.imgur.com/FxQQhUh.png)
+from this window you can set the ip address to connect to
+you can also set your username that will be visible over your fleet
+when you are in server mode, connect will start the server
+
+for a client to join the game all the following must match
+- game version
+- mod list
+- game seed
+
+if you do not know the seed trying to connect will give you the right seed, you can copy it using the `copy` button in the ui
+![both client and server connexions windows](https://i.imgur.com/ZJ5M9Nk.png)
 
 ## FAQ
 
-What don't work
+### What works
+- You can see other players fleet along with their fleet composition / weapons / officers
+![Moving around](https://i.imgur.com/9CBtYOZ.gif)
+- you can affect markets via trades / military actions / creating a colony / destroying a colony
+![sold 5 things to market, he then bought them](https://i.imgur.com/kJUCHrH.gif)
+- you can drop cargo pods and have another player pick them back up
+![picking up Cargo](https://i.imgur.com/TrFQ7k3.gif)
+### What doesn't work / exist yet
 
-Colony destruction
+- no combat
+- no ai fleet
+- no missions
+- the games must be started with the same seed, in the future  you ideally would not need to do that
+- fleet position rubber banding (acceleration issue)
 
-## Explanation of Folders/Files
+## Troubleshooting
 
-The template contains many folders and files that are commonly used, but not all.
-You may not need everything, but leaving them in place doesn't hurt either.
-
-- `.git/` Optional. Used by git to store all git-related information. May be deleted if you are not using git.
-- `.idea/` Required. Used by IntelliJ to store settings and configuration.
-- `.run/` Optional. Used by IntelliJ, contains a ready-to-use configuration for running the game. May be deleted if you
-  want to make your own Run Configuration instead.
-- `data/` Optional. Used by Starsector, this folder just contains some common files that mods use that you would
-  probably end up creating yourself. May be deleted if you don't need it.
-- `graphics/` Optional. Default location to place images of all kinds.
-- `sounds/` Optional. Default location to place sounds, including music, which you then add to `data/config/sounds.json`.
-- `src/` Optional? Contains example source code which you will presumably build upon. May be deleted if your mod doesn't
-  have any code (but then why use this template...?)
-- `.gitignore` Optional. Used by git to determine which files should not be committed (for example, not to commit temp
-  files used during the build process). May be deleted if not using git.
-- `LICENSE` Optional. This is the license file, delete or modify it to your liking.
-- `mod_info.json` Required.
-- `README.md` Required?
-- `yourName_uniqueid.version` Optional. This is a sample Version Checker file. May be deleted if not using Version
-  Checker (but you should).
-
-
-## IntelliJ Configuration
-
-### Set your SDK (the thing that compiles the Java code)
-
-- Open `File -> Project Structure -> Project`.
-- Ensure that the `Language Level` is set to `17`.
-- Set an SDK. This should be 17 (recommended) or higher. You can also download an SDK from this dropdown, if the Download option is provided.
-
-![SDKs!](readme_files/intellij-sdk.png "SDKs")
-
-### Ensure that your run configuration is correct:
-
-- In IntelliJ, click `Run - Edit Configurations`.
-- Select "Run Starsector"
-- [ ] Set Working directory to the location of your `starsector-core` folder, if different than what's currently there.
-- [ ] Check other values to make sure they fit your Starsector install. By default, they are set for a typical Windows
-  install.
-- Click Ok. You should now be able to choose Run Starsector from the Run menu and then click the **Debug** button (the icon
-  of a bug)
-- If you are running on linux:
-  - for the VM Arguments, copy your `starsector_linux.sh` file and paste it into the VM Arguments field.
-  - Then, at the start of the args, add `-server -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005`
-
-![Run configuration!](readme_files/intellij-run.png "Run configuration")
-
-### "I didn't put the template in my mods folder"
-
-If you want to symlink or something to the mods folder, then we need to fix some more file paths.
-
-If you placed the template folder in your mods folder, skip to the next part.
-
-1. Open `.idea/libraries/starfarer_api.xml`. It should be fairly clear what needs to be fixed; any path that's pointing to the default game installation should be changed to point to wherever you have it installed.
-   1. It's also possible to edit this in File -> Project Structure -> Libraries, but for editing en masse, editing the xml directly is simpler.
-2. Do the same for `.run/Run Starsector.xml`.
-
-![Library configuration!](readme_files/intellij-libs.png "Library configuration")
-
-### Running the game
-
-To actually build your mod and run the game with it, look for and **click the Debug icon**, which looks like a bug and is green by default. It should be at the top of IntelliJ and next to Build (hammer icon) and Run (play icon) buttons.
-
-Clicking the Debug button will build the .jar, launch the game and pause it, attach IntelliJ's debugger, and unpause the game. The game's launcher will then show. Don't forget to enable your mod in the launcher.
-
-Don't click the Run (play) icon; it will cause the game to wait indefinitely for the debugger and never launch.
-
-### It's working, now what?
-
-Now you have a template that works, but we need to personalize it so multiple people can use the template without
-stepping on each others' toes, so to speak.
-
-See that in `src`, we have `author.modname` as the package (which matches the folder path `src/author/modname`).
-
-1. [ ] The first step is to change the package of our code. This is an organization thing; if there are two Java files
-   with
-   the same name in the same package, then only one of them will get loaded, but if they're in different packages, both
-   will be loaded.
-    1. The easy way to change this is to open up `TemplateModPlugin.java`, click on the first line (`package...`),
-       right-click, and choose Refactor -> Rename. Change it to match your username and modname (or whatever you prefer)
-       .
-    2. When done, you shouldn't have any code in `author.modname`. If that still exists, it can be safely deleted.
-    3. 
-   ![Rename!](readme_files/intellij-rename.png "Rename")
-2. [ ] Now, we've changed where the ModPlugin is located and we need to tell the game the new location the game can call
-   it
-   when the game loads.
-    1. Open the `mod_info.json` file, find `"modPlugin"`, and edit it to use your new package (if you forgot, it's the
-       first line of your `TemplateModPlugin.java` file).
-3. [ ] You can also change the name of the .jar file, which is `Template.jar` by default, in `File -> Project Structure -> Artifacts`, then just right-click on `Template.jar` and choose rename.
-   1. [ ] You will also need to update the name of the .jar in your `mod_info.json` file so the game knows where to look.
-
-![Jar!](readme_files/intellij-artifact.png "Jar")
-
-## Adding more dependencies/libraries
-
-Need to depend on another mod or library (e.g. [GraphicsLib], [LazyLib], [LunaLib], [MagicLib], [Nexelerin], etc)?
-
-1. `File -> Project Structure -> Modules -> "starsector-intellij-template" -> Dependencies tab -> + icon -> JARS or
-   Directories`. Select the .jar(s) you want to add.
-2. Leave Export unchecked and Scope to Compile.
+- The planets are not in the same positions -> try to pause / un-pause the game
+- check the UI if you are still connected to the server
+- I do not see the other person fleet, or it keeps disappearing -> change fleet composition / order
 
 ## Other
 
-Author: Wisp
+Author: MatlabMaster
 
-Lowtech Tempest: Selkie
-
-[GraphicsLib]: https://fractalsoftworks.com/forum/index.php?topic=10982.0
-[MagicLib]: https://github.com/MagicLibStarsector/MagicLib/
-[LazyLib]: https://github.com/LazyWizard/lazylib/
-[LunaLib]: https://github.com/Lukas22041/LunaLib/
-[Nexelerin]: https://github.com/Histidine91/Nexerelin/
-
-# StarSector Multiplayer Mod
-
-## Client/Server Implementation
-
-This mod implements a simple client/server architecture for StarSector multiplayer functionality.
-
-### User Identification
-
-Each player is assigned a unique, persistent user ID that is stored locally in a `user_id.dat` file. This ID remains constant across game sessions and is used to identify players in the multiplayer environment.
-
-### Server Features
-
-The server provides the following functionality:
-
-1. **Connection Management**
-   - Accepts client connections
-   - Maintains a list of connected clients
-   - Handles client disconnections
-
-2. **Message Broadcasting**
-   - `broadcast(message)`: Sends a message to all connected clients
-   - `sendTo(userId, message)`: Sends a message to a specific client
-   - `sendToEveryoneBut(userId, message)`: Sends a message to all clients except the specified one
-
-### Client Features
-
-The client provides:
-
-1. **Connection**
-   - Automatically connects to the server
-   - Sends its user ID upon connection
-   - Maintains a persistent connection
-
-2. **Message Handling**
-   - Sends messages to the server
-   - Receives messages from the server
-   - Processes incoming messages through a message handler
-
-### Usage
-
-#### Server Setup
-```java
-Server server = new Server(port);
-server.start();
-```
-
-#### Client Setup
-```java
-Client client = new Client(serverIp, serverPort, messageHandler);
-client.connect();
-```
-
-#### Sending Messages
-```java
-// From client to server
-client.sendMessage("Hello server!");
-
-// From server to clients
-server.broadcast("Hello everyone!");
-server.sendTo("user123", "Private message");
-server.sendToEveryoneBut("user123", "Message for everyone else");
-```
-
-### Configuration
-
-The mod can be configured through the `settings.json` file:
-
-```json
-{
-    "gameSettings": {
-        "mode": "client"
-    },
-    "clientSettings": {
-        "serverIp": "127.0.0.1",
-        "serverPort": 4444
-    },
-    "serverSettings": {
-        "port": 4444
-    }
-}
-```
-
-### Error Handling
-
-The implementation includes basic error handling for:
-- Connection failures
-- Message sending/receiving errors
-- Client disconnections
-- Server shutdown
-
-### Security
-
-The current implementation uses a simple user ID system. For production use, additional security measures should be implemented, such as:
-- Authentication
-- Message encryption
-- Input validation
-- Rate limiting
+This was made possible thanks to the many community provided resources like wiki, other open sourced mods, and the offical starfarer API 

@@ -156,6 +156,8 @@ public class MarketUpdateHelper {
 
 
             //stolen from https://fractalsoftworks.com/forum/index.php?topic=8581.0
+            //sometime I get null connected entities, must remove to prevent crash
+            market.getConnectedEntities().remove(null);
             for(SectorEntityToken entity : market.getConnectedEntities()){
                 entity.setMarket(market);
                 entity.setFaction(factionId);

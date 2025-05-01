@@ -20,7 +20,16 @@ public class NetworkWindow extends JFrame {
 
     public NetworkWindow() {
         setTitle("Multiplayer Network");
-        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+        // Add a WindowListener to handle the close attempt
+        addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                // Optionally show a message or do nothing
+                messageField.append("Closing the window is disabled.\n");
+                // You can add other logic here, e.g., prompt the user or log the attempt
+            }
+        });
         setSize(800, 600);
         setLayout(new BorderLayout(10, 10));
 

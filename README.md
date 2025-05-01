@@ -54,16 +54,13 @@ If you don't know the seed, attempting to connect will display the correct seed.
 
 ### What Works
 - View other players' fleets, including composition, weapons, and officers:
-
-  ![Moving Around](https://i.imgur.com/9CBtYOZ.gif)
+  <img src="https://i.imgur.com/9CBtYOZ.gif" alt="Two fleet moving around">
 
 - Affect markets through trading, military actions, founding colonies, or destroying colonies:
-
-  ![Market Interaction](https://i.imgur.com/kJUCHrH.gif)
+  <img src="https://i.imgur.com/kJUCHrH.gif" alt="Market Interaction">
 
 - Drop cargo pods for other players to pick up:
-
-  ![Cargo Pickup](https://i.imgur.com/TrFQ7k3.gif)
+  <img src="https://i.imgur.com/TrFQ7k3.gif" alt="Cargo Pickup">
 
 ### What Doesn't Work (Yet)
 - No combat.

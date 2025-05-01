@@ -1,4 +1,4 @@
-# Starsector Multiplayer Mod
+# Starsector campaign Multiplayer Mod
 
 ## Description
 

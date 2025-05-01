@@ -38,6 +38,7 @@ public class MultiplayerModPlugin extends BaseModPlugin {
 
     @Override
     public void onGameLoad(boolean newGame) {
+        Global.getSector().addTransientScript(new ConnectionCheckScript());
         Global.getSector().addTransientScript(new MessageProcessingScript());
         Global.getSector().addTransientScript(new FastUpdateScript());
         Global.getSector().addTransientScript(new SlowUpdateScript());

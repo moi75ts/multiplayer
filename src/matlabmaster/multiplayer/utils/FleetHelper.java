@@ -4,12 +4,23 @@ import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.CampaignFleetAPI;
 import com.fs.starfarer.api.campaign.FleetDataAPI;
 import com.fs.starfarer.api.characters.AbilityPlugin;
+import com.fs.starfarer.api.characters.PersonAPI;
+import com.fs.starfarer.api.combat.MutableStat;
 import com.fs.starfarer.api.combat.ShipVariantAPI;
+import com.fs.starfarer.api.combat.StatBonus;
 import com.fs.starfarer.api.fleet.FleetMemberAPI;
 import com.fs.starfarer.api.fleet.FleetMemberType;
+import com.fs.starfarer.api.fleet.MutableFleetStatsAPI;
+import com.fs.starfarer.api.impl.campaign.AICoreOfficerPluginImpl;
+import com.fs.starfarer.api.impl.campaign.ids.Commodities;
+import matlabmaster.multiplayer.MessageSender;
+import matlabmaster.multiplayer.MultiplayerModPlugin;
+import matlabmaster.multiplayer.User;
+import matlabmaster.multiplayer.events.SystemEntryScript;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.lwjgl.Sys;
 
 
 import java.security.NoSuchAlgorithmException;
@@ -50,8 +61,9 @@ public class FleetHelper {
         serializedFleet.put("id",fleet.getId());
         serializedFleet.put("locationX",fleet.getLocation().getX());
         serializedFleet.put("locationY",fleet.getLocation().getY());
-        serializedFleet.put("location",Global.getSector().getCurrentLocation());
+        serializedFleet.put("location",Global.getSector().getCurrentLocation().getName());
         serializedFleet.put("factionId",fleet.getFaction().getId());
+        serializedFleet.put("acceleration",fleet.getAcceleration());
         try{
             serializedFleet.put("currentAssignment",fleet.getCurrentAssignment().getActionText());
             serializedFleet.put("currentAssignmentTargetId",fleet.getCurrentAssignment().getTarget().getId());
@@ -103,10 +115,26 @@ public class FleetHelper {
     public static void unSerializeFleet(JSONObject serializedFleet, CampaignFleetAPI fleet, boolean moveDestination) throws JSONException {
         Map<String,String> trackedData;
         fleet.setId(serializedFleet.getString("id"));
-        fleet.getLocation().set((float)serializedFleet.getDouble("locationX"), (float) serializedFleet.getDouble("locationY"));
-        fleet.setFaction(serializedFleet.getString("factionId"));
+        float remoteX = (float)serializedFleet.getDouble("locationX");
+        float remoteY = (float) serializedFleet.getDouble("locationY");
+        float localX  = fleet.getLocation().getX();
+        float localY = fleet.getLocation().getY();
+        float deltaX = remoteX - localX;
+        float deltaY = remoteY - localY;
+        float distance = (float) Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+        //rubberbanding is caused by incorrect acceleration values, I tried to fix it but failed
+        if(distance > 200){ //fleet are too far appart, hard tp to remote location
+            fleet.setLocation(remoteX, remoteY);
+        }
         if(moveDestination){
             fleet.setMoveDestination((float) serializedFleet.getDouble("moveDestinationX"), (float) serializedFleet.getDouble("moveDestinationY"));
+        }
+
+
+        if(!Objects.equals(serializedFleet.getString("factionId"), "player")){
+            fleet.setFaction(serializedFleet.getString("factionId"));//it is the fleet of another player
+        }else{
+            fleet.setFaction("neutral");
         }
         fleet.setTransponderOn(serializedFleet.getBoolean("isTransponderOn"));
         //todo assignments
@@ -178,7 +206,18 @@ public class FleetHelper {
         }
         float burnBonus = remoteMaxBurn-localMaxBurn + localMaxBurn - baseFleetBurn;
         fleet.getStats().getFleetwideMaxBurnMod().modifyFlat("sync",burnBonus);
-
+        //sometime the fleet will generate empty, and thus will be instantly deleted
+        //but the hash will be correct and thus not updating the fleet, so until the hash changes, an empty fleet will keep spawning and despawning
+        //so this is a quick fix to prevent this issue
+        if(fleet.getFleetData().getNumMembers() == 0){
+            addOrUpdateTrackedFleet(
+                    serializedFleet.getString("id"),
+                    "needUpdate",
+                    "needUpdate",
+                    "needUpdate",
+                    "needUpdate"
+            );
+        }
     }
 
     public static JSONArray serializeAbilities(Map<String, AbilityPlugin> abilities) throws JSONException {
@@ -220,14 +259,16 @@ public class FleetHelper {
         JSONArray serializedFleet = new JSONArray();
         for(FleetMemberAPI ship : fleet.getMembersListWithFightersCopy()){
             JSONObject shipSerialized = new JSONObject();
+            //todo ask on forums for fix for starting spec id
+            //the regex is a hack to have it work
+            //todo also the regex breaks some more complicated variants, D A variants transforming it into a D variant
+            //I had a beautiful code using getSpecId, until for some reason i realised that the starting ships have a weird specId, and if i use baseHull, i kill all the variants
+            //weird spec id instead of apogee_Hull, the spec id for the starting apogee is 9f38
             String hullId = ship.getHullSpec().getHullId();
             // Remove variant suffix if present (like "_default_D")
             if (hullId.contains("_default_")) {
                 hullId = hullId.substring(0, hullId.indexOf("_default_"));
             }
-            //todo please fix fucked specId for starting ships
-            //todo also the regex breaks some more complicated variants, D A variants transforming it into a D variant
-            //I had a beautiful code using getSpecId, until for some reason i realised that the starting ships have a fucked up specId, and if i use baseHull, i kill all the variants
             shipSerialized.put("hull", hullId);
             shipSerialized.put("combatReadiness",ship.getRepairTracker().getCR());
             shipSerialized.put("name",ship.getShipName());
@@ -284,11 +325,11 @@ public class FleetHelper {
         }catch (Exception e){
             ship.setShipName("");
         }
-
         ship.getRepairTracker().setMothballed(shipObject.getBoolean("isMothballed"));
         ship.getVariant().setNumFluxVents(shipObject.getInt("fluxVents"));
         ship.getVariant().setNumFluxCapacitors(shipObject.getInt("fluxCapacitors"));
         ship.setFlagship(shipObject.getBoolean("isFlagShip"));
+
         JSONArray hullMods = shipObject.getJSONArray("hullMods");
         for(i = 0 ; i < hullMods.length() ; i++){
             ship.getVariant().addMod(hullMods.getString(i));
@@ -315,10 +356,12 @@ public class FleetHelper {
         }catch (Exception e){
             //nothing
         }
+        //warning may not work with modded AI cores
         if(shipObject.getBoolean("isAiCore")){
-            ship.getCaptain().setAICoreId(shipObject.getString("aiCoreId"));
+            AICoreOfficerPluginImpl aiCorePlugin = new AICoreOfficerPluginImpl();
+            PersonAPI captain = aiCorePlugin.createPerson(shipObject.getString("aiCoreId"),"neutral",null);
+            ship.setCaptain(captain);
         }
-        //todo fix ai core ship
         return ship;
     }
 
@@ -359,5 +402,20 @@ public class FleetHelper {
 
     public static Boolean isAbilityBeingUsed(String abilityID,CampaignFleetAPI fleet){
         return fleet.getAbility(abilityID).isActiveOrInProgress();
+    }
+
+    public static void sendSpawnedFleet(CampaignFleetAPI fleet) throws JSONException, NoSuchAlgorithmException {
+        JSONObject message = new JSONObject();
+        message.put("command", 9);
+        message.put("playerId", User.getUserId());
+        message.put("fleet",serializeFleet(fleet));
+        MessageSender sender = MultiplayerModPlugin.getMessageSender();
+        sender.sendMessage(message.toString());
+    }
+
+    public static void spawnNewFleet(JSONObject message) throws JSONException {
+        JSONObject serializedFleet = message.getJSONObject("fleet");
+        CampaignFleetAPI fleet = Global.getFactory().createEmptyFleet(serializedFleet.getString("factionId"),"grou grou gabi",true);
+        unSerializeFleet(serializedFleet,fleet,true);
     }
 }

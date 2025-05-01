@@ -6,17 +6,13 @@ import com.fs.starfarer.api.campaign.CampaignFleetAPI;
 import com.fs.starfarer.api.campaign.LocationAPI;
 import com.fs.starfarer.api.campaign.SectorAPI;
 import com.fs.starfarer.api.campaign.SectorEntityToken;
-import com.fs.starfarer.api.characters.AbilityPlugin;
-import com.fs.starfarer.api.fleet.FleetMemberAPI;
-import com.fs.starfarer.api.fleet.FleetMemberType;
-import matlabmaster.multiplayer.SlowUpdates.CargoPodsSync;
+import matlabmaster.multiplayer.fastUpdates.CargoPodsSync;
 import matlabmaster.multiplayer.utils.CargoHelper;
 import matlabmaster.multiplayer.utils.FleetHelper;
 import matlabmaster.multiplayer.utils.MarketUpdateHelper;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.log4j.LogManager;
-import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -76,6 +72,9 @@ public class MessageProcessingScript implements EveryFrameScript {
                     case 7:
                         handleCargoPods(data);
                         break;
+                    case 9:
+                        handleFleetSpawn(data);
+                        break;
                     default:
                         LOGGER.log(Level.WARN, "Unknown command received: " + command);
                 }
@@ -92,19 +91,13 @@ public class MessageProcessingScript implements EveryFrameScript {
             String location = serializedFleet.getString("location");
             SectorAPI sector = Global.getSector();
             LocationAPI currentLocation = sector.getCurrentLocation();
-            float serverX = 0;
-            float serverY = 0;
-            float remoteX = (float) serializedFleet.getDouble("locationX");
-            float remoteY = (float) serializedFleet.getDouble("locationY");
             String currentSystemName = currentLocation != null ? currentLocation.getName() : "";
             CampaignFleetAPI fleet = (CampaignFleetAPI) sector.getEntityById(serializedFleet.getString("id"));
             if (Objects.equals(location.toLowerCase(), currentSystemName.toLowerCase())) {
                 if (fleet == null) {
-                    fleet = Global.getFactory().createEmptyFleet("neutral", "WIP", true);
+                    fleet = Global.getFactory().createEmptyFleet("neutral", "fleet of " + senderPlayerId, true);
                     assert currentLocation != null;
                     currentLocation.addEntity(fleet);
-                    fleet.setFaction("neutral");
-                    fleet.setName("Fleet of " + senderPlayerId);
                 } else {
                     SectorEntityToken entity = Global.getSector().getEntityById(serializedFleet.getString("id"));
                     if (entity instanceof CampaignFleetAPI) {
@@ -112,17 +105,9 @@ public class MessageProcessingScript implements EveryFrameScript {
                     }
                 }
                 fleet.setId(senderPlayerId);
-                FleetHelper.unSerializeFleet(serializedFleet, fleet, false);
+                FleetHelper.unSerializeFleet(serializedFleet, fleet, true);
                 fleet.setAI(null);
-                fleet.setMoveDestination(fleet.getLocation().getX(), fleet.getLocation().getY());
-                FleetHelper.unSerializeAbilities(serializedFleet.getJSONArray("abilities"), fleet);
-                fleet.setTransponderOn(serializedFleet.getBoolean("isTransponderOn"));
-                serverX = fleet.getLocation().getX();
-                serverY = fleet.getLocation().getY();
-                float deltaX = remoteX - serverX;
-                float deltaY = remoteY - serverY;
-                float distance = (float) Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-                fleet.setLocation(remoteX, remoteY);
+
 
                 LOGGER.log(Level.DEBUG, "Updated fleet for player " + senderPlayerId + " in " + location);
             } else {
@@ -139,7 +124,7 @@ public class MessageProcessingScript implements EveryFrameScript {
     private void handeOrbitUpdate(JSONObject data) {
         try {
             if (Objects.equals(MultiplayerModPlugin.getMode(), "server")) {
-                Server.sendOrbitingBodiesUpdate(data.getString("system"));
+                Server.sendOrbitingBodiesUpdate(data);
             } else {
                 Client.handleOrbitingBodiesUpdate(data);
             }
@@ -211,5 +196,8 @@ public class MessageProcessingScript implements EveryFrameScript {
         } catch (Exception e) {
             LOGGER.log(Level.ERROR, "Error handling marketUpdate request " + e.getMessage());
         }
+    }
+    private void handleFleetSpawn(JSONObject data) throws JSONException {
+        FleetHelper.spawnNewFleet(data);
     }
 }

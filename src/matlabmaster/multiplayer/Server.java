@@ -208,30 +208,28 @@ public class Server implements MessageSender, MessageReceiver {
         }
     }
 
-    public static void sendOrbitingBodiesUpdate(String systemName) throws JSONException {
-        MessageSender sender = MultiplayerModPlugin.getMessageSender();
-        if (sender != null && sender.isActive()) {
-            try {
-                JSONObject message = new JSONObject();
-                message.put("command", 6);
-                message.put("playerId", "server");
-                LocationAPI system = Global.getSector().getStarSystem(systemName);
-                List<SectorEntityToken> stableLocations = system.getAllEntities();
-                JSONArray toSync = new JSONArray();
-                for (SectorEntityToken entity : stableLocations) {
-                    if (entity.getCustomEntityType() == "orbital_junk" || entity.getCustomEntityType() == "null") {
-                    } else {
-                        JSONObject thing = new JSONObject();
-                        thing.put("id", entity.getId());
-                        thing.put("a", entity.getCircularOrbitAngle());
-                        toSync.put(thing);
-                    }
+    public static void sendOrbitingBodiesUpdate(JSONObject data) throws JSONException {
+        try {
+            JSONObject message = new JSONObject();
+            message.put("command", 6);
+            message.put("playerId", "server");
+            LocationAPI system = Global.getSector().getStarSystem(data.getString("system"));
+            List<SectorEntityToken> stableLocations = system.getAllEntities();
+            JSONArray toSync = new JSONArray();
+            for (SectorEntityToken entity : stableLocations) {
+                if (entity.getCustomEntityType() == "orbital_junk" || entity.getCustomEntityType() == "null") {
+                } else {
+                    JSONObject thing = new JSONObject();
+                    thing.put("id", entity.getId());
+                    thing.put("a", entity.getCircularOrbitAngle());
+                    toSync.put(thing);
                 }
-                message.put("toSync", toSync);
-                sender.sendMessage(message.toString());
-            } catch (JSONException e) {
-                LOGGER.log(Level.ERROR, "Failed to construct JSON message: " + e.getMessage());
             }
+            message.put("toSync", toSync);
+            Server serverInstance = (Server) MultiplayerModPlugin.getMessageSender();
+            serverInstance.sendTo(data.getString("playerId"), message.toString());
+        } catch (JSONException e) {
+            LOGGER.log(Level.ERROR, "Failed to construct JSON message: " + e.getMessage());
         }
     }
 

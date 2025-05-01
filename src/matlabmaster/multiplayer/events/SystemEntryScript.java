@@ -4,6 +4,7 @@ import com.fs.starfarer.api.EveryFrameScript;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.LocationAPI;
 import com.fs.starfarer.api.campaign.SectorEntityToken;
+import matlabmaster.multiplayer.MultiplayerModPlugin;
 import matlabmaster.multiplayer.requests.StarSystemSync;
 
 public class SystemEntryScript implements EveryFrameScript {
@@ -22,28 +23,30 @@ public class SystemEntryScript implements EveryFrameScript {
 
     @Override
     public void advance(float amount) {
-        SectorEntityToken playerFleet = Global.getSector().getPlayerFleet();
-        if (playerFleet == null) return;
+        if(MultiplayerModPlugin.getMessageSender() != null){
+            SectorEntityToken playerFleet = Global.getSector().getPlayerFleet();
+            if (playerFleet == null) return;
 
-        LocationAPI currentLocation = playerFleet.getContainingLocation();
+            LocationAPI currentLocation = playerFleet.getContainingLocation();
 
-        // Check if the player has moved from hyperspace to a system
-        if (lastLocation != null && lastLocation.isHyperspace() && currentLocation.getName() != lastLocation.getName()) {
-            if (!hasRun) {
-                StarSystemSync.orbitUpdateRequest();
-                Global.getSector().getCampaignUI().addMessage("Player entered system: " + currentLocation.getName());
-                hasRun = true; // Prevent repeated triggers in the same system
+            // Check if the player has moved from hyperspace to a system
+            if (lastLocation != null && lastLocation.isHyperspace() && currentLocation.getName() != lastLocation.getName()) {
+                if (!hasRun) {
+                    StarSystemSync.orbitUpdateRequest();
+                    Global.getSector().getCampaignUI().addMessage("Player entered system: " + currentLocation.getName());
+                    hasRun = true; // Prevent repeated triggers in the same system
+                }
+            } else if (lastLocation != null && currentLocation.isHyperspace()) {
+                hasRun = false; // Reset when leaving to hyperspace
+            }else{
+                //logged in system
+                if(!hasRun){
+                    StarSystemSync.orbitUpdateRequest();
+                    hasRun = true;
+                }
             }
-        } else if (lastLocation != null && currentLocation.isHyperspace()) {
-            hasRun = false; // Reset when leaving to hyperspace
-        }else{
-            //logged in system
-            if(!hasRun){
-                StarSystemSync.orbitUpdateRequest();
-                hasRun = true;
-            }
+
+            lastLocation = currentLocation;
         }
-
-        lastLocation = currentLocation;
     }
 }

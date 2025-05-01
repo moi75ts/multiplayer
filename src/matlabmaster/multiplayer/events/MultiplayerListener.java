@@ -6,10 +6,13 @@ import com.fs.starfarer.api.characters.AbilityPlugin;
 import com.fs.starfarer.api.characters.PersonAPI;
 import com.fs.starfarer.api.combat.EngagementResultAPI;
 import com.fs.starfarer.api.fleet.FleetMemberAPI;
+import matlabmaster.multiplayer.MultiplayerModPlugin;
+import matlabmaster.multiplayer.utils.FleetHelper;
 import matlabmaster.multiplayer.utils.MarketUpdateHelper;
 import org.json.JSONException;
 import org.lwjgl.Sys;
 
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -22,13 +25,15 @@ public class MultiplayerListener implements CampaignEventListener {
 
     @Override
     public void reportPlayerClosedMarket(MarketAPI market) {
-        List<MarketAPI> listOfMarketsToUpdate = new ArrayList<>();
-        listOfMarketsToUpdate.add(market);
-        try {
-            System.out.println("send market update for market " + market.getId());
-            MarketUpdateHelper.sendMarketUpdate(listOfMarketsToUpdate);
-        } catch (JSONException e) {
-            throw new RuntimeException(e);
+        if(MultiplayerModPlugin.getMessageSender() != null){
+            List<MarketAPI> listOfMarketsToUpdate = new ArrayList<>();
+            listOfMarketsToUpdate.add(market);
+            try {
+                System.out.println("send market update for market " + market.getId());
+                MarketUpdateHelper.sendMarketUpdate(listOfMarketsToUpdate);
+            } catch (JSONException e) {
+                throw new RuntimeException(e);
+            }
         }
     }
 
@@ -69,7 +74,12 @@ public class MultiplayerListener implements CampaignEventListener {
 
     @Override
     public void reportFleetSpawned(CampaignFleetAPI fleet) {
-
+        //try {
+        //    FleetHelper.sendSpawnedFleet(fleet);
+        //} catch (JSONException | NoSuchAlgorithmException e) {
+        //    throw new RuntimeException(e);
+        //}
+        //disabled for release broken
     }
 
     @Override

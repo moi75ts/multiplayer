@@ -1,4 +1,4 @@
-package matlabmaster.multiplayer.SlowUpdates;
+package matlabmaster.multiplayer.fastUpdates;
 
 import com.fs.starfarer.api.campaign.SectorEntityToken;
 import matlabmaster.multiplayer.MessageSender;

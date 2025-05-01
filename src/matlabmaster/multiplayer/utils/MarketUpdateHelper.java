@@ -14,63 +14,72 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.awt.*;
 import java.util.*;
+import java.util.List;
 
 public class MarketUpdateHelper {
     public static void handleMarketUpdate(JSONObject data) throws JSONException {
         EconomyAPI economy = Global.getSector().getEconomy();
         JSONArray markets = data.getJSONArray("markets");
-        boolean newMarket = false;
+        boolean newMarket;
         for (int i = 0; i < markets.length(); i++) {
             JSONObject marketObject = markets.getJSONObject(i);
             MarketAPI market;
             newMarket = false;
+            String factionId = "playerA";
+            boolean anotherPlayerMarket = false;
+
+
             StarSystemAPI systemMarket = Global.getSector().getStarSystem(marketObject.getString("marketSystem"));
             market = economy.getMarket(marketObject.getString("marketId"));
             if (market == null) {
                 market = Global.getFactory().createMarket(marketObject.getString("marketId"), marketObject.getString("name"), marketObject.getInt("marketSize"));
                 newMarket = true;
             }
+
+
+            if(Objects.equals(marketObject.getString("ownerFactionId"), "player") && !market.isPlayerOwned()){
+                anotherPlayerMarket = true;
+            }
+
+            applyConditionsToMarket(marketObject.getJSONArray("conditions"),market);
+
+            //if it is just a planet do not sync its data
+            if(marketObject.getBoolean("isPlanetConditionMarketOnly")){
+                market.setPlanetConditionMarketOnly(true);
+                continue;
+            }else {
+                market.setPlanetConditionMarketOnly(false);
+            }
+
             SectorEntityToken primaryEntity = Global.getSector().getEntityById(marketObject.getString("primaryEntity"));
             market.setName(marketObject.getString("name"));
             market.setSize(marketObject.getInt("marketSize"));
-            market.setFactionId(marketObject.getString("ownerFactionId"));
+
+            //this piece of code is used to "find" the correct faction, if this is our faction, on the other clients string the faction will be something else like playera
+            //so when they update it the factionid they will send will be playera,
+            //we must keep it at player since this is our market
+            if(anotherPlayerMarket) {
+                factionId = "playera"; //the market belong to someone else than us
+            }else if(market.isPlayerOwned()){
+                factionId = "player";//this is our market
+            }else{
+                factionId = marketObject.getString("ownerFactionId");//this is an ai market
+            }
+            market.setFactionId(factionId);
             market.setFreePort(marketObject.getBoolean("isFreePort"));
             market.setHasSpaceport(marketObject.getBoolean("hasSpaceport"));
             market.setHasWaystation(marketObject.getBoolean("hasWaystation"));
             market.setSize(marketObject.getInt("marketSize"));
-            market.setSurveyLevel(MarketAPI.SurveyLevel.FULL);
-            market.setPlayerOwned(false);
             market.getTariff().modifyFlat("default_tariff", market.getFaction().getTariffFraction());
             market.setHidden(marketObject.getBoolean("isHidden"));
+            if(market.isHidden()){
+                market.setSurveyLevel(MarketAPI.SurveyLevel.NONE);
+            }else{
+                market.setSurveyLevel(MarketAPI.SurveyLevel.FULL);
+            }
             market.setPrimaryEntity(Global.getSector().getEntityById(marketObject.getString("primaryEntity")));
-            // Get current market conditions as a Set for easier comparison
-            Set<String> currentConditions = new HashSet<>();
-            for (MarketConditionAPI condition : market.getConditions()) {
-                currentConditions.add(condition.getId());
-            }
-
-            // Get new conditions from JSONArray as a Set
-            Set<String> newConditions = new HashSet<>();
-            JSONArray conditions = marketObject.getJSONArray("conditions");
-            for (int j = 0; j < conditions.length(); j++) {
-                String condition = conditions.get(j).toString();
-                newConditions.add(condition);
-            }
-
-            // Remove conditions that are in current but not in new
-            for (String conditionId : currentConditions) {
-                if (!newConditions.contains(conditionId)) {
-                    market.removeCondition(conditionId);
-                }
-            }
-
-            // Add conditions that are in new but not in current
-            for (String conditionId : newConditions) {
-                if (!currentConditions.contains(conditionId)) {
-                    market.addCondition(conditionId);
-                }
-            }
 
             JSONArray connectedEntities = marketObject.getJSONArray("connectedEntities");
             for (int j = 0; j < connectedEntities.length(); j++) {
@@ -86,12 +95,14 @@ public class MarketUpdateHelper {
                     added.entity.setId(entityObject.getString("EntityID"));
                     added.entity.getLocation().setX((float) entityObject.getDouble("locationx"));
                     added.entity.getLocation().setY((float) entityObject.getDouble("locationy"));
+                    added.entity.setMarket(market);
                     if (market.getPrimaryEntity() == null) {
                         market.setPrimaryEntity(added.entity);
                     } else {
                         market.getConnectedEntities().add(added.entity);
                     }
                 } else {
+                    entity.setMarket(market);
                     market.getConnectedEntities().add(entity);
                 }
             }
@@ -117,11 +128,6 @@ public class MarketUpdateHelper {
                     industry.setSpecialItem(null);
                 }
             }
-            //yeah sometimes i get null connected entities so i remove them
-            market.getConnectedEntities().remove(null);
-            for (SectorEntityToken connectedEntity : market.getConnectedEntities()) {
-                connectedEntity.setMarket(market);
-            }
 
             JSONArray submarkets = marketObject.getJSONArray("subMarkets");
             for (int j = 0; j < submarkets.length(); j++) {
@@ -144,9 +150,35 @@ public class MarketUpdateHelper {
             }
 
             if (newMarket) {
-                economy.addMarket(market, false);
+                economy.addMarket(market, true);
             }
             economy.forceStockpileUpdate(market);
+
+
+            //stolen from https://fractalsoftworks.com/forum/index.php?topic=8581.0
+            for(SectorEntityToken entity : market.getConnectedEntities()){
+                entity.setMarket(market);
+                entity.setFaction(factionId);
+            }
+
+
+            if(anotherPlayerMarket){
+                //add markets if none exists
+                //if a player market has no market (no commerce or underground) other players won't be able to trade here
+                //this ensure that cross player trade can happen
+                if(market.getSubmarket("open_market") == null){
+                    market.addSubmarket("open_market");
+                    market.getSubmarket("open_market").setFaction(Global.getSector().getFaction("independent"));
+                }
+                if(market.getSubmarket("black_market") == null){
+                    market.addSubmarket("black_market");
+                    market.getSubmarket("black_market").setFaction(Global.getSector().getFaction("pirates"));
+                }
+                if(market.getSubmarket("storage") == null){
+                    market.addSubmarket("storage");
+                    market.getSubmarket("storage").setFaction(Global.getSector().getFaction("neutral"));
+                }
+            }
         }
     }
 
@@ -184,6 +216,7 @@ public class MarketUpdateHelper {
         marketJson.put("primaryEntityy", market.getLocation().y);
         marketJson.put("marketSystem", market.getStarSystem().getId());
         marketJson.put("isHidden", market.isHidden());
+        marketJson.put("isPlanetConditionMarketOnly",market.isPlanetConditionMarketOnly());
 
         JSONArray connectedEntities = new JSONArray();
         Set<SectorEntityToken> connectedClientEntities = market.getConnectedEntities();
@@ -282,6 +315,34 @@ public class MarketUpdateHelper {
 
         Server serverInstance = (Server) MultiplayerModPlugin.getMessageSender();
         serverInstance.sendTo(playerId, message.toString());
-        serverInstance.sendToEveryoneBut(playerId, message.toString());
+    }
+
+    public static void applyConditionsToMarket(JSONArray conditions,MarketAPI market) throws JSONException {
+        // Get current market conditions as a Set for easier comparison
+        Set<String> currentConditions = new HashSet<>();
+        for (MarketConditionAPI condition : market.getConditions()) {
+            currentConditions.add(condition.getId());
+        }
+
+        // Get new conditions from JSONArray as a Set
+        Set<String> newConditions = new HashSet<>();
+        for (int j = 0; j < conditions.length(); j++) {
+            String condition = conditions.get(j).toString();
+            newConditions.add(condition);
+        }
+
+        // Remove conditions that are in current but not in new
+        for (String conditionId : currentConditions) {
+            if (!newConditions.contains(conditionId)) {
+                market.removeCondition(conditionId);
+            }
+        }
+
+        // Add conditions that are in new but not in current
+        for (String conditionId : newConditions) {
+            if (!currentConditions.contains(conditionId)) {
+                market.addCondition(conditionId);
+            }
+        }
     }
 }

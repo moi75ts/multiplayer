@@ -44,10 +44,41 @@ public class NetworkWindow extends JFrame {
         gbc.weightx = 1.0;
         mainPanel.add(ipField, gbc);
 
+        // User ID Section
+        JLabel userIdLabel = new JLabel("User ID:");
+        gbc.gridx = 0;
+        gbc.gridy = 1;
+        gbc.gridwidth = 1;
+        gbc.fill = GridBagConstraints.NONE;
+        mainPanel.add(userIdLabel, gbc);
+
+        JTextField userIdField = new JTextField(User.getUserId(), 20);
+        gbc.gridx = 1;
+        gbc.gridy = 1;
+        gbc.gridwidth = 1;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        mainPanel.add(userIdField, gbc);
+
+        JButton updateIdButton = new JButton("Update");
+        updateIdButton.addActionListener(e -> {
+            String newId = userIdField.getText().trim();
+            if (!newId.isEmpty()) {
+                User.setUserId(newId);
+                messageField.append("User ID updated to: " + newId + "\n");
+            } else {
+                messageField.append("User ID cannot be empty\n");
+            }
+        });
+        gbc.gridx = 2;
+        gbc.gridy = 1;
+        gbc.gridwidth = 1;
+        gbc.fill = GridBagConstraints.NONE;
+        mainPanel.add(updateIdButton, gbc);
+
         // Server Seed Section
         JLabel seedLabel = new JLabel("Server Seed:");
         gbc.gridx = 0;
-        gbc.gridy = 1;
+        gbc.gridy = 2;
         gbc.gridwidth = 1;
         gbc.fill = GridBagConstraints.NONE;
         mainPanel.add(seedLabel, gbc);
@@ -55,7 +86,7 @@ public class NetworkWindow extends JFrame {
         serverSeedField = new JTextField("Not available", 20);
         serverSeedField.setEditable(false);
         gbc.gridx = 1;
-        gbc.gridy = 1;
+        gbc.gridy = 2;
         gbc.gridwidth = 1;
         gbc.fill = GridBagConstraints.HORIZONTAL;
         mainPanel.add(serverSeedField, gbc);
@@ -63,7 +94,7 @@ public class NetworkWindow extends JFrame {
         copySeedButton = new JButton("Copy");
         copySeedButton.addActionListener(e -> copySeedToClipboard());
         gbc.gridx = 2;
-        gbc.gridy = 1;
+        gbc.gridy = 2;
         gbc.gridwidth = 1;
         gbc.fill = GridBagConstraints.NONE;
         mainPanel.add(copySeedButton, gbc);
@@ -77,7 +108,7 @@ public class NetworkWindow extends JFrame {
         buttonPanel.add(modeButton);
 
         gbc.gridx = 1;
-        gbc.gridy = 2;
+        gbc.gridy = 3;
         gbc.gridwidth = 2;
         gbc.fill = GridBagConstraints.NONE;
         gbc.weightx = 0;
@@ -87,7 +118,7 @@ public class NetworkWindow extends JFrame {
         // Status Section
         JLabel statusLabel = new JLabel("Status");
         gbc.gridx = 0;
-        gbc.gridy = 3;
+        gbc.gridy = 4;
         gbc.gridwidth = 1;
         gbc.fill = GridBagConstraints.NONE;
         mainPanel.add(statusLabel, gbc);
@@ -95,7 +126,7 @@ public class NetworkWindow extends JFrame {
         statusField = new JTextField("Disconnected", 20);
         statusField.setEditable(false);
         gbc.gridx = 1;
-        gbc.gridy = 3;
+        gbc.gridy = 4;
         gbc.gridwidth = 2;
         gbc.fill = GridBagConstraints.HORIZONTAL;
         mainPanel.add(statusField, gbc);
@@ -103,7 +134,7 @@ public class NetworkWindow extends JFrame {
         // Messages Section
         JLabel messageLabel = new JLabel("Messages");
         gbc.gridx = 0;
-        gbc.gridy = 4;
+        gbc.gridy = 5;
         gbc.gridwidth = 1;
         gbc.fill = GridBagConstraints.NONE;
         mainPanel.add(messageLabel, gbc);
@@ -112,7 +143,7 @@ public class NetworkWindow extends JFrame {
         messageField.setEditable(false);
         JScrollPane scrollPane = new JScrollPane(messageField);
         gbc.gridx = 1;
-        gbc.gridy = 4;
+        gbc.gridy = 5;
         gbc.gridwidth = 2;
         gbc.fill = GridBagConstraints.BOTH;
         gbc.weightx = 1.0;

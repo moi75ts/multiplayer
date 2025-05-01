@@ -3,9 +3,9 @@
   "name": "The multiplayer mod",
   "author": "MatlabMaster",
   "utility": false,
-  "version": { "major": '0', "minor": '3', "patch": '5' },
+  "version": { "major": '0', "minor": '3', "patch": '6' },
   "description": "MatlabMaster's multiplayer mod",
-  "gameVersion": "0.98a-RC7",
+  "gameVersion": "0.98a-RC8",
   "jars": [ "jars/multiplayer.jar" ],
   "modPlugin": "matlabmaster.multiplayer.MultiplayerModPlugin"
 }

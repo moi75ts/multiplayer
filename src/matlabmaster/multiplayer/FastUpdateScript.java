@@ -3,19 +3,15 @@ package matlabmaster.multiplayer;
 import com.fs.starfarer.api.EveryFrameScript;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.CampaignFleetAPI;
-import com.fs.starfarer.api.campaign.FleetDataAPI;
-import com.fs.starfarer.api.characters.AbilityPlugin;
-import matlabmaster.multiplayer.SlowUpdates.CargoPodsSync;
+import matlabmaster.multiplayer.fastUpdates.CargoPodsSync;
 import matlabmaster.multiplayer.utils.FleetHelper;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.log4j.LogManager;
-import org.json.JSONArray;
 import org.json.JSONObject;
 import org.json.JSONException;
 
 import java.security.NoSuchAlgorithmException;
-import java.util.Map;
 
 public class FastUpdateScript implements EveryFrameScript {
     private static final Logger LOGGER = LogManager.getLogger("multiplayer");
@@ -35,14 +31,16 @@ public class FastUpdateScript implements EveryFrameScript {
 
     @Override
     public void advance(float amount) {
-        timer += amount;
-        if (timer >= INTERVAL) {
-            timer -= INTERVAL; // Reset with remainder to avoid drift
-            sendPositionUpdate();
-            try {
-                CargoPodsSync.cargoPodsCheck();
-            } catch (JSONException e) {
-                throw new RuntimeException(e);
+        if(MultiplayerModPlugin.getMessageSender() != null){
+            timer += amount;
+            if (timer >= INTERVAL) {
+                timer -= INTERVAL; // Reset with remainder to avoid drift
+                sendPositionUpdate();
+                try {
+                    CargoPodsSync.cargoPodsCheck();
+                } catch (JSONException e) {
+                    throw new RuntimeException(e);
+                }
             }
         }
     }

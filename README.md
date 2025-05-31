@@ -1,4 +1,10 @@
-# Starsector campaign Multiplayer Mod
+# [Semi abandonned]Starsector campaign Multiplayer Mod
+
+## Mod Status Disclaimer
+
+This mod has been on hold for a while, and its networking component needs a comprehensive overhaul. Currently, it operates on a client-server architecture, but we believe transitioning to a peer-to-peer (P2P) architecture would improve the experience. In a P2P system, when a player pauses the game, other clients can take on the authoritative role and sync with the paused client once it resumes.
+
+We don’t have any updates planned in the immediate future, but we appreciate your interest and support for the project!
 
 ## Description
 

@@ -75,7 +75,10 @@ public class PersonsHelper {
         );
         person.setName(name);
         person.setRankId(serializedPerson.getString("rank"));
-        person.setPostId(serializedPerson.getString("post"));
+        try{
+            person.setPostId(serializedPerson.getString("post"));
+        }catch (Exception e){
+        }
         person.setPortraitSprite(serializedPerson.getString("sprite"));
         person.getStats().setLevel(serializedPerson.getInt("level"));
         if(serializedPerson.getBoolean("isAiCore")){

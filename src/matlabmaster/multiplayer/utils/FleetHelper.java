@@ -13,6 +13,8 @@ import com.fs.starfarer.api.fleet.FleetMemberType;
 import com.fs.starfarer.api.fleet.MutableFleetStatsAPI;
 import com.fs.starfarer.api.impl.campaign.AICoreOfficerPluginImpl;
 import com.fs.starfarer.api.impl.campaign.ids.Commodities;
+import com.fs.starfarer.api.loading.WeaponGroupSpec;
+import com.fs.starfarer.api.loading.WeaponGroupType;
 import matlabmaster.multiplayer.MessageSender;
 import matlabmaster.multiplayer.MultiplayerModPlugin;
 import matlabmaster.multiplayer.User;
@@ -307,10 +309,21 @@ public class FleetHelper {
                 fittedGunsArray.put(gunSlotObject);
             }
             shipSerialized.put("fittedGuns",fittedGunsArray);
+            JSONArray weaponGroupsArray = new JSONArray();
+            for (WeaponGroupSpec weaponGroup : shipVariant.getWeaponGroups()) {
+                JSONObject weaponGroupObject = new JSONObject();
+                weaponGroupObject.put("type", weaponGroup.getType());
+                weaponGroupObject.put("autofire", weaponGroup.isAutofireOnByDefault());
+                JSONArray slots = new JSONArray();
+                for (String slotId : weaponGroup.getSlots()) {
+                    slots.put(slotId);
+                }
+                weaponGroupObject.put("slots", slots);
+                weaponGroupsArray.put(weaponGroupObject);
+            }
+            shipSerialized.put("weaponGroups", weaponGroupsArray);
 
-            shipSerialized.put("captainId",ship.getCaptain().getId());
-            shipSerialized.put("isAiCore",ship.getCaptain().isAICore());
-            shipSerialized.put("aiCoreId",ship.getCaptain().getAICoreId());
+            shipSerialized.put("captain", PersonsHelper.serializePerson(ship.getCaptain()));
             serializedFleet.put(shipSerialized);
         }
         return serializedFleet;
@@ -350,18 +363,18 @@ public class FleetHelper {
             JSONObject fittedGun = fittedGuns.getJSONObject(i);
             ship.getVariant().addWeapon(fittedGun.getString("slotId"),fittedGun.getString("gunId"));
         }
-
-        try {
-            ship.setCaptain(Global.getSector().getImportantPeople().getPerson(shipObject.getString("captainId")));
-        }catch (Exception e){
-            //nothing
+        JSONArray weaponGroups = shipObject.getJSONArray("weaponGroups");
+        for (i = 0; i < weaponGroups.length(); i++) {
+            JSONObject weaponGroupObject = weaponGroups.getJSONObject(i);
+            WeaponGroupSpec weaponGroup = new WeaponGroupSpec();
+            weaponGroup.setType(WeaponGroupType.valueOf(weaponGroupObject.getString("type")));
+            weaponGroup.setAutofireOnByDefault(weaponGroupObject.getBoolean("autofire"));
+            for (int j = 0; j < weaponGroupObject.getJSONArray("slots").length(); j++) {
+                weaponGroup.addSlot(weaponGroupObject.getJSONArray("slots").getString(j));
+            }
+            ship.getVariant().addWeaponGroup(weaponGroup);
         }
-        //warning may not work with modded AI cores
-        if(shipObject.getBoolean("isAiCore")){
-            AICoreOfficerPluginImpl aiCorePlugin = new AICoreOfficerPluginImpl();
-            PersonAPI captain = aiCorePlugin.createPerson(shipObject.getString("aiCoreId"),"neutral",null);
-            ship.setCaptain(captain);
-        }
+        ship.setCaptain(PersonsHelper.unSerializePerson(shipObject.getJSONObject("captain")));
         return ship;
     }
 

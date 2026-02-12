@@ -8,8 +8,6 @@
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="library" name="starfarer.api" level="project" />
-    <orderEntry type="library" name="LazyLib" level="project" />
-    <orderEntry type="library" name="LunaLib" level="project" />
-    <orderEntry type="library" name="lw_Console" level="project" />
+    <orderEntry type="library" name="compare-utils-1.1.0" level="project" />
   </component>
 </module>

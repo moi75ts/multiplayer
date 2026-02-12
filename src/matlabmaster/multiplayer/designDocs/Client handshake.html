@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Client-Server Fleet Connection Flowchart</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            max-width: 900px;
+            width: 100%;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 24px;
+        }
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Client-Server Fleet Synchronization Flow</h1>
+        <div class="mermaid">
+            flowchart TD
+                Start([Client Connects to Server]) --> Check{Is Self-Hosted?}
+                Check -->|No| SendSnapshot[Client sends own fleet<br/>snapshot to server]
+                SendSnapshot --> KillFleets[Client kills all fleets<br/>except player fleet]
+                KillFleets --> RequestFleets[Client requests all fleets<br/>from server]
+                RequestFleets --> AddFleets[Client adds received fleets<br/>into game]
+                AddFleets --> Normal[Client enters<br/>normal operation]
+                Check -->|Yes| Normal
+                Normal --> End([End])
+                
+                style Start fill:#4CAF50,stroke:#388E3C,stroke-width:2px,color:#fff
+                style End fill:#4CAF50,stroke:#388E3C,stroke-width:2px,color:#fff
+                style Check fill:#FF9800,stroke:#F57C00,stroke-width:2px,color:#fff
+                style SendSnapshot fill:#2196F3,stroke:#1976D2,stroke-width:2px,color:#fff
+                style KillFleets fill:#2196F3,stroke:#1976D2,stroke-width:2px,color:#fff
+                style RequestFleets fill:#2196F3,stroke:#1976D2,stroke-width:2px,color:#fff
+                style AddFleets fill:#2196F3,stroke:#1976D2,stroke-width:2px,color:#fff
+                style Normal fill:#9C27B0,stroke:#7B1FA2,stroke-width:2px,color:#fff
+        </div>
+    </div>
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                fontSize: '16px',
+                fontFamily: 'Arial, sans-serif'
+            }
+        });
+    </script>
+</body>
+</html>

@@ -2,6 +2,8 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
+      <module fileurl="file://$PROJECT_DIR$/Starsector-core/Starsector-core.iml" filepath="$PROJECT_DIR$/Starsector-core/Starsector-core.iml" />
+      <module fileurl="file://$PROJECT_DIR$/libs/libs.iml" filepath="$PROJECT_DIR$/libs/libs.iml" />
       <module fileurl="file://$PROJECT_DIR$/starsector-intellij-template.iml" filepath="$PROJECT_DIR$/starsector-intellij-template.iml" />
     </modules>
   </component>

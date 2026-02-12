@@ -20,7 +20,8 @@ public class MultiplayerModPlugin extends BaseModPlugin {
     // Unique Client and Server Instance
     private static Server serverInstance;
     private static Client clientInstance;
-    private static UI uiInstance; // ADD THIS
+    private static UI uiInstance;
+    private static ClientScripts clientScriptsInstance;
 
     @Override
     public void onApplicationLoad() throws Exception {
@@ -45,9 +46,13 @@ public class MultiplayerModPlugin extends BaseModPlugin {
     }
 
     @Override
-    public void onGameLoad(boolean newGame){
+    public void onGameLoad(boolean newGame) {
         super.onGameLoad(newGame);
-        Global.getSector().addTransientScript(new ClientScripts(clientInstance));
+
+        if (clientScriptsInstance == null) { //ensure only one client script exist at a all time
+            clientScriptsInstance = new ClientScripts(clientInstance);
+        }
+        Global.getSector().addTransientScript(clientScriptsInstance);
         System.out.println("registered scripts");
     }
 

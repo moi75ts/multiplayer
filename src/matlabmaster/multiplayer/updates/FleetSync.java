@@ -29,4 +29,7 @@ public class FleetSync
     public void handleRemoteFleetUpdate(JSONObject fleetDiffs) throws JSONException {
         FleetSerializer.applyFleetDiff((CampaignFleetAPI) Global.getSector().getEntityById(fleetDiffs.getString("fleetId")),fleetDiffs.getJSONObject("changes"));
     }
+
+    public void sendGlobalFleetsUpdate(Client client) {
+    }
 }

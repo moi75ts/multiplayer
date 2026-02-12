@@ -130,6 +130,9 @@ public class ClientScripts implements EveryFrameScript {
         try {
             // Envoi de notre position au serveur
             fleetSync.sendOwnFleetUpdate(client);
+            if(client.isSelfHosted){
+                fleetSync.sendGlobalFleetsUpdate(client);
+            }
         } catch (Exception e) {
             System.err.println("[ERROR] Unable to send own fleet update: " + e.getMessage());
         }

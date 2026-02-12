@@ -18,7 +18,6 @@ public class FleetHelper {
             for (CampaignFleetAPI fleet : fleetsCopy) {
                 if (!fleet.isPlayerFleet() && !fleet.isStationMode()) {
                     fleet.despawn();
-                    System.out.println("despawned" + fleet.getName());
                 }
             }
         }

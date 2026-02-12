@@ -10,6 +10,10 @@ import com.fs.starfarer.api.fleet.FleetMemberAPI;
 import com.fs.starfarer.api.fleet.FleetMemberType;
 import com.fs.starfarer.api.loading.WeaponGroupSpec;
 import com.fs.starfarer.api.loading.WeaponGroupType;
+import com.fs.starfarer.campaign.ai.CampaignFleetAI;
+import com.fs.starfarer.campaign.ai.ModularFleetAI;
+import com.fs.starfarer.campaign.fleet.CampaignFleet;
+import com.fs.starfarer.launcher.opengl.GLModPickerV2;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -101,8 +105,7 @@ public class FleetSerializer {
                 patchAbilities(fleet, subDiff);
                 break;
             case "assignment":
-                patchAssignment(fleet, subDiff);
-                break;
+                System.out.println("[assignment] " + subDiff);
         }
     }
 
@@ -275,18 +278,9 @@ public class FleetSerializer {
         // Ships: keyed by FleetMember ID
         serializedFleet.put("ships", serializeFleetShips(fleet.getFleetData()));
 
-        FleetAssignmentDataAPI current = fleet.getCurrentAssignment();
-        if (current != null) {
-            JSONObject assignment = new JSONObject();
-            assignment.put("type", current.getAssignment().name());
-            assignment.put("text", current.getActionText());
-            // If there's a target entity (like a station or another fleet), sync its ID
-            if (current.getTarget() != null) {
-                assignment.put("targetId", current.getTarget().getId());
-            }
-            serializedFleet.put("assignment", assignment);
+        if(fleet.getCurrentAssignment() != null){
+            serializedFleet.put("assignment",serializeAssignment(fleet.getCurrentAssignment()));
         }
-
         return serializedFleet;
     }
 
@@ -313,6 +307,29 @@ public class FleetSerializer {
         CargoSerializer.addCargoFromMappedSerialized(serializedFleet.getJSONObject("cargo"), fleet.getCargo());
 
         unSerializeFleetMembers(serializedFleet.getJSONObject("ships"), fleet);
+
+        if(!serializedFleet.getBoolean("isPlayerFleet")){
+            try {
+                if(fleet.isAIMode() && !fleet.isPlayerFleet()){
+                    if(fleet.getAI() == null){
+                        fleet.setAI(new ModularFleetAI((CampaignFleet) fleet));
+                    }
+
+                    JSONObject assignment = serializedFleet.getJSONObject("assignment");
+                    SectorEntityToken target = Global.getSector().getEntityById(assignment.getString("target"));
+                    if(target != null){
+                        fleet.clearAssignments();
+                        fleet.inflateIfNeeded();
+                        fleet.getAI().addAssignment(FleetAssignment.valueOf(assignment.getString("assignment")), target, 1000f,null);
+                        fleet.getCurrentAssignment().setActionText(assignment.getString("text"));// no need to expire since will be replaced as soon as another update happens
+                    }
+                }
+
+            }catch (Exception e){
+                System.out.println(e);
+            }
+        }
+
 
     }
 
@@ -575,27 +592,11 @@ public class FleetSerializer {
         }
     }
 
-    private static void patchAssignment(CampaignFleetAPI fleet, JSONObject assignmentDiff) throws JSONException {
-        // Since assignments are usually a single active state, we check for an UPDATE or ADDED action
-        if (assignmentDiff.has("action")) {
-            JSONObject data = assignmentDiff.getJSONObject("value");
-            String typeStr = data.getString("type");
-            String text = data.optString("text", "");
-            String targetId = data.optString("targetId", null);
-
-            FleetAssignment type = FleetAssignment.valueOf(typeStr);
-            SectorEntityToken target = null;
-
-            if (targetId != null) {
-                target = fleet.getContainingLocation().getEntityById(targetId);
-            }
-
-            // Clear existing NPC AI orders to prevent conflicts
-            fleet.clearAssignments();
-
-            // Apply the new assignment
-            // We use 1000 days as duration because the sync will clear/update it anyway
-            fleet.addAssignment(type, target, 1000f, text);
-        }
+    private static JSONObject serializeAssignment(FleetAssignmentDataAPI assignment) throws JSONException{
+        JSONObject serializedAssignments = new JSONObject();
+        serializedAssignments.put("target",assignment.getTarget().getId());
+        serializedAssignments.put("assignment",assignment.getAssignment().name());
+        serializedAssignments.put("text",assignment.getActionText());
+        return serializedAssignments;
     }
 }

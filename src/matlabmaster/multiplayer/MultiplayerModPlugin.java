@@ -6,6 +6,7 @@ import matlabmaster.multiplayer.client.Client;
 import matlabmaster.multiplayer.client.ClientScripts;
 import matlabmaster.multiplayer.listeners.MultiplayerWatchdog;
 import matlabmaster.multiplayer.server.Server;
+import matlabmaster.multiplayer.server.ServerScripts;
 import matlabmaster.multiplayer.ui.UI;
 import org.apache.log4j.Level;
 import org.apache.log4j.LogManager;
@@ -22,6 +23,7 @@ public class MultiplayerModPlugin extends BaseModPlugin {
     private static Client clientInstance;
     private static UI uiInstance;
     private static ClientScripts clientScriptsInstance;
+    private static ServerScripts serverScriptsInstance;
 
     @Override
     public void onApplicationLoad() throws Exception {
@@ -49,10 +51,15 @@ public class MultiplayerModPlugin extends BaseModPlugin {
     public void onGameLoad(boolean newGame) {
         super.onGameLoad(newGame);
 
-        if (clientScriptsInstance == null) { //ensure only one client script exist at a all time
+        if (clientScriptsInstance == null) { //ensure only one client script exist at any time
             clientScriptsInstance = new ClientScripts(clientInstance);
         }
         Global.getSector().addTransientScript(clientScriptsInstance);
+
+        if (serverScriptsInstance == null) {
+            serverScriptsInstance = new ServerScripts(serverInstance);
+        }
+        Global.getSector().addTransientScript(serverScriptsInstance);
         System.out.println("registered scripts");
     }
 

@@ -7,9 +7,12 @@ import com.fs.starfarer.campaign.Faction;
 import matlabmaster.multiplayer.updates.FleetSync;
 import matlabmaster.multiplayer.utils.FleetHelper;
 import matlabmaster.multiplayer.utils.FleetSerializer;
+import matlabmaster.multiplayer.utils.PauseUtility;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class ClientScripts implements EveryFrameScript {
@@ -59,11 +62,9 @@ public class ClientScripts implements EveryFrameScript {
             return;
         }
 
-        if(Global.getSector().isPaused()){
-            if(!Global.getSector().getCampaignUI().isShowingDialog()){
-                Global.getSector().setPaused(false);
-            }
-        }
+        //handle the game pausing , disable classic in game pause
+        //if the game is in a dialog inform the server
+        PauseUtility.clientPauseUtility(client);
 
         // --- 1. TRAITEMENT DES MESSAGES REÇUS (À CHAQUE FRAME) ---
         // On traite TOUS les messages en attente pour éviter la latence
@@ -117,6 +118,49 @@ public class ClientScripts implements EveryFrameScript {
                     break;
                 case "playerJoined":
                     System.out.println("[JOINED] " + message.getString("id") + " joined the game");
+                    break;
+                case "globalFleetsUpdate":
+                    //modifying msg to match what fleetSync.handleRemoteFleetUpdate expect
+                    JSONObject updates = message.getJSONObject("updates");
+                    Iterator<?> keys = updates.keys();
+                    while (keys.hasNext()){
+                        String fleetId = (String) keys.next();
+                        JSONObject updateWrapper = new JSONObject();
+                        updateWrapper.put("fleetId", fleetId);
+                        updateWrapper.put("changes", updates.getJSONObject(fleetId));
+
+                        //same as PLayerFleetUpdate but with a list of fleets to update
+                        if (Global.getSector().getEntityById(fleetId) instanceof CampaignFleetAPI) {
+                            fleetSync.handleRemoteFleetUpdate(updateWrapper);
+                        } else {
+                            JSONObject packet = new JSONObject();
+                            packet.put("commandId","requestFleetSnapshot");
+                            packet.put("fleetId",fleetId);
+                            System.out.println("[WARN] globalFleetsUpdate : unknown fleet " + fleetId);
+                            client.send(packet.toString());
+                        }
+                    }
+                    break;
+                case "youAreAuthority":
+                    client.isAuthority = true;
+                    System.out.println("[DEBUG] you are the authority");
+                    break;
+                case "youAreNoLongerAuthority":
+                    client.isAuthority = false;
+                    System.out.println("[DEBUG] you are no longer the authority");
+                    break;
+                case "requestFleetSnapshot":
+                    JSONObject packet = new JSONObject();
+                    packet.put("fleet",FleetSerializer.serializeFleet((CampaignFleetAPI) Global.getSector().getEntityById(message.getString("fleetId"))));
+                    packet.put("commandId","handleFleetSnapshotRequest");
+                    packet.put("to",message.getString("from"));
+                    client.send(packet.toString());
+                    break;
+                case "handleFleetSnapshotRequest":
+                    //noinspection DuplicateBranchesInSwitch
+                    FleetSerializer.unSerializeFleet(message.getJSONObject("fleet"),Global.getFactory().createEmptyFleet(Faction.NO_FACTION,true));
+                    System.out.println("new fleet");
+                    break;
                 default:
                     System.out.println("[ERROR] unknown command: " + commandId);
                     break;
@@ -128,9 +172,8 @@ public class ClientScripts implements EveryFrameScript {
 
     private void executeTick() {
         try {
-            // Envoi de notre position au serveur
             fleetSync.sendOwnFleetUpdate(client);
-            if(client.isSelfHosted){
+            if(client.isAuthority){
                 fleetSync.sendGlobalFleetsUpdate(client);
             }
         } catch (Exception e) {

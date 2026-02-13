@@ -11,6 +11,7 @@ import com.fs.starfarer.api.impl.campaign.ids.Commodities;
 import matlabmaster.multiplayer.UserError;
 import matlabmaster.multiplayer.utils.FleetHelper;
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 import org.lwjgl.Sys;
 
@@ -18,9 +19,10 @@ public class Server {
     private final int port;
     private ServerSocket serverSocket;
     public volatile boolean isRunning = false; // volatile pour garantir la visibilité entre threads
-    private final ConcurrentHashMap<String, ClientHandler> clients = new ConcurrentHashMap<>();
+    public final ConcurrentHashMap<String, ClientHandler> clients = new ConcurrentHashMap<>();
     private ExecutorService threadPool;
     private  ServerListener listener;
+    public ClientHandler authority;
 
     public Server(int port) {
         this.port = port;
@@ -118,7 +120,7 @@ public class Server {
             if (!json.has("commandId")) return;
 
             String commandId = json.getString("commandId");
-
+            JSONObject packet = new JSONObject();
             // 3. Dispatcher
             switch (commandId) {
                 case "playerFleetUpdate":
@@ -126,7 +128,7 @@ public class Server {
                     break;
                 case "requestAllFleetsSnapshot":
                     JSONArray fleetsSnapshot = FleetHelper.getFleetsSnapshot();
-                    JSONObject packet = new JSONObject();
+
                     packet.put("commandId", "handleAllFleetsSnapshot");
                     packet.put("fleets",fleetsSnapshot);
                     sendTo(clientId, String.valueOf(packet));
@@ -135,24 +137,98 @@ public class Server {
                     //noinspection DuplicateBranchesInSwitch
                     broadcastExcept(clientId, message);
                     break;
+                case "globalFleetsUpdate":
+                    //noinspection DuplicateBranchesInSwitch
+                    broadcastExcept(clientId, message);
+                    break;
+                case "requestFleetSnapshot":
+                    packet.put("commandId","requestFleetSnapshot");
+                    packet.put("from",clientId);
+                    packet.put("fleetId",json.getString("fleetId"));
+                    authority.sendMessage(packet.toString());
+                    //relay request to authority client
+                    //send back reply to original asker
+                    break;
+                case "handleFleetSnapshotRequest":
+                    sendTo(json.getString("to"),json.toString());
+                    break;
+                case "paused":
+                    clients.get(clientId).isPaused = true;
+                    System.out.println("[INFO] client " + clientId + " has paused");
+                    if(clients.get(clientId) == authority){
+                        authorityManager(this);
+                    }
+                    break;
+                case "unpaused":
+                    clients.get(clientId).isPaused = false;
+                    System.out.println("[INFO] client " + clientId + " has unpaused");
+                    break;
                 default:
                     System.out.println("[INFO] Unknown command: " + commandId);
                     break;
             }
 
         } catch (Exception e) {
-            // Si org.json lève une exception de sécurité, on le saura ici
             System.err.println("[ERROR] JSON Error from " + clientId + " : " + e.getMessage());
+        }
+    }
+
+    private void authorityManager(Server server) throws JSONException {
+        //if this method was called this means that the authority paused / left
+        //to ensure smooth gameplay across clients a new authority must be set so that updates keep flowing
+        //if all the clients are paused keep the authority the same
+        ClientHandler newAuthority = null;
+        ClientHandler lastClient = null;
+        ClientHandler originalAuthority = server.authority;
+        
+        // Clean up: if current authority is no longer in clients, clear it
+        if(originalAuthority != null && !server.clients.containsValue(originalAuthority)){
+            originalAuthority = null;
+            server.authority = null;
+        }
+        
+        for (ClientHandler client : server.clients.values()){
+            lastClient = client;
+            if(!client.isPaused){
+                newAuthority = client;
+                break; // Found an unpaused client, use them as authority
+            }
+        }
+        
+        // If no unpaused client found, keep the current authority (or set to last client if authority was removed)
+        if(newAuthority == null){
+            if(authority != null && server.clients.containsValue(authority)){
+                // Keep current authority if they're still in the clients list
+                return;
+            } else {
+                // Authority was removed, set to last client (or null if no clients)
+                // If no clients remain, authority will be null (handled by ServerScripts)
+                authority = lastClient;
+            }
+        } else {
+            authority = newAuthority;
+        }
+
+        if(authority != originalAuthority){
+            if(originalAuthority != null){
+                JSONObject packet = new JSONObject();
+                packet.put("commandId","youAreNoLongerAuthority");
+                originalAuthority.sendMessage(packet.toString());
+            }
+            JSONObject packet = new JSONObject();
+            packet.put("commandId","youAreAuthority");
+            authority.sendMessage(packet.toString());
         }
     }
 
     // --- INNER CLASS : GESTIONNAIRE DE CLIENT ---
 
-    private class ClientHandler implements Runnable {
+    public class ClientHandler implements Runnable {
         private final Socket socket;
         private final String clientId;
         private PrintWriter out;
         private final Server server;
+        public boolean isPaused;
 
         public ClientHandler(Socket socket, String clientId, Server server) {
             this.socket = socket;
@@ -193,7 +269,18 @@ public class Server {
         }
 
         public void closeConnection() {
+            boolean wasAuthority = (this == server.authority);
             clients.remove(clientId);
+            
+            // If the authority disconnected, reassign authority
+            if (wasAuthority) {
+                try {
+                    authorityManager(server);
+                } catch (JSONException e) {
+                    System.err.println("[ERROR] Failed to reassign authority after disconnect: " + e.getMessage());
+                }
+            }
+            
             try {
                 if (socket != null && !socket.isClosed()) {
                     socket.close();

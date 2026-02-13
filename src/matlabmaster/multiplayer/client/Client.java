@@ -19,6 +19,8 @@ public class Client {
     private volatile boolean isConnected = false;
     private final CopyOnWriteArrayList<ClientListener> listeners = new CopyOnWriteArrayList<>();
     public boolean isSelfHosted = false;
+    public boolean isAuthority = false;
+    public boolean wasPaused = false;
 
     public interface ClientListener {
         void onDisconnected();
@@ -70,7 +72,6 @@ public class Client {
                 System.out.println("[ERROR] Handshake failed " + Arrays.toString(e.getStackTrace()));
                 disconnect();
             }
-
         }
         new Thread(() -> {
             try {

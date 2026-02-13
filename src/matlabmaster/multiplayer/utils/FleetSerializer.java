@@ -278,9 +278,9 @@ public class FleetSerializer {
         // Ships: keyed by FleetMember ID
         serializedFleet.put("ships", serializeFleetShips(fleet.getFleetData()));
 
-        if(fleet.getCurrentAssignment() != null){
-            serializedFleet.put("assignment",serializeAssignment(fleet.getCurrentAssignment()));
-        }
+        //if(fleet.getCurrentAssignment() != null){
+        //    serializedFleet.put("assignment",serializeAssignment(fleet.getCurrentAssignment()));
+        //}
         return serializedFleet;
     }
 
@@ -308,27 +308,27 @@ public class FleetSerializer {
 
         unSerializeFleetMembers(serializedFleet.getJSONObject("ships"), fleet);
 
-        if(!serializedFleet.getBoolean("isPlayerFleet")){
-            try {
-                if(fleet.isAIMode() && !fleet.isPlayerFleet()){
-                    if(fleet.getAI() == null){
-                        fleet.setAI(new ModularFleetAI((CampaignFleet) fleet));
-                    }
-
-                    JSONObject assignment = serializedFleet.getJSONObject("assignment");
-                    SectorEntityToken target = Global.getSector().getEntityById(assignment.getString("target"));
-                    if(target != null){
-                        fleet.clearAssignments();
-                        fleet.inflateIfNeeded();
-                        fleet.getAI().addAssignment(FleetAssignment.valueOf(assignment.getString("assignment")), target, 1000f,null);
-                        fleet.getCurrentAssignment().setActionText(assignment.getString("text"));// no need to expire since will be replaced as soon as another update happens
-                    }
-                }
-
-            }catch (Exception e){
-                System.out.println(e);
-            }
-        }
+        //if(!serializedFleet.getBoolean("isPlayerFleet")){
+        //    try {
+        //        if(fleet.isAIMode() && !fleet.isPlayerFleet()){
+        //            if(fleet.getAI() == null){
+        //                fleet.setAI(new ModularFleetAI((CampaignFleet) fleet));
+        //            }
+//
+        //            JSONObject assignment = serializedFleet.getJSONObject("assignment");
+        //            SectorEntityToken target = Global.getSector().getEntityById(assignment.getString("target"));
+        //            if(target != null){
+        //                fleet.clearAssignments();
+        //                fleet.inflateIfNeeded();
+        //                fleet.getAI().addAssignment(FleetAssignment.valueOf(assignment.getString("assignment")), target, 1000f,null);
+        //                fleet.getCurrentAssignment().setActionText(assignment.getString("text"));// no need to expire since will be replaced as soon as another update happens
+        //            }
+        //        }
+//
+        //    }catch (Exception e){
+        //        System.out.println(e);
+        //    }
+        //}
 
 
     }

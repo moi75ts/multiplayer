@@ -16,7 +16,7 @@ import org.json.JSONObject;
 import org.lwjgl.Sys;
 
 public class Server {
-    private final int port;
+    private int port;
     private ServerSocket serverSocket;
     public volatile boolean isRunning = false; // volatile pour garantir la visibilité entre threads
     public final ConcurrentHashMap<String, ClientHandler> clients = new ConcurrentHashMap<>();
@@ -25,6 +25,10 @@ public class Server {
     public ClientHandler authority;
 
     public Server(int port) {
+        this.port = port;
+    }
+
+    public void setPort(int port) {
         this.port = port;
     }
 

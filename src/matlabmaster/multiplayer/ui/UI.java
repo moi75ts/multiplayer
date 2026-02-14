@@ -19,6 +19,7 @@ public class UI extends JFrame {
     private JButton hostCurrentButton;
 
     private JTextField ipField;
+    private JTextField portField;
     private JComboBox<String> modeSelector;
 
     private final Server server;
@@ -71,11 +72,13 @@ public class UI extends JFrame {
         modeSelector = new JComboBox<>(new String[]{"HOST MODE", "JOIN MODE"});
         ipField = new JTextField("127.0.0.1", 10);
         ipField.setEnabled(false);
+        portField = new JTextField("20603", 6);
 
         modeSelector.addActionListener(e -> toggleMode());
 
         configPanel.add(new JLabel("Mode: ")); configPanel.add(modeSelector);
         configPanel.add(new JLabel(" IP: ")); configPanel.add(ipField);
+        configPanel.add(new JLabel(" Port: ")); configPanel.add(portField);
 
         // --- CONSOLE ---
         logArea = new JTextArea();
@@ -123,8 +126,12 @@ public class UI extends JFrame {
     private void startHost(boolean asCurrentGame) {
         try{
             if (!isRunning) {
+                int port = parsePort();
+                if (port <= 0) return;
+                server.setPort(port);
                 server.start();
                 isRunning = true;
+                final int connectPort = port;
                 System.out.println("[SYSTEM] SERVER STARTED AS " + (asCurrentGame ? "HOSTED GAME" : "DEDICATED"));
 
                 if (asCurrentGame) {
@@ -133,7 +140,7 @@ public class UI extends JFrame {
                         try {
                             Thread.sleep(200); // Pause de 200ms pour laisser le port s'ouvrir
                             client.isSelfHosted = true;
-                            client.connect("127.0.0.1", 20603);
+                            client.connect("127.0.0.1", connectPort);
                             updateButtonStyle();
                         } catch (Exception ex) {
                             System.err.println("[ERROR] FAILURE TO AUTO CONNECT : " + ex.getMessage());
@@ -156,9 +163,12 @@ public class UI extends JFrame {
 
     private void startJoin() {
         if (!isRunning) {
+            int port = parsePort();
+            if (port <= 0) return;
+            final int connectPort = port;
             new Thread(() -> {
                 try {
-                    client.connect(ipField.getText(), 20603);
+                    client.connect(ipField.getText(), connectPort);
                     isRunning = true;
                     updateButtonStyle();
                 }catch (UserError e){
@@ -196,6 +206,7 @@ public class UI extends JFrame {
                 actionButton.setText("CONNECT");
                 actionButton.setBackground(new Color(80, 250, 123));
                 modeSelector.setEnabled(true);
+                portField.setEnabled(true);
                 isRunning = false;
             } else {
                 // Quelque chose tourne
@@ -206,6 +217,7 @@ public class UI extends JFrame {
                 actionButton.setText("DISCONNECT");
                 actionButton.setBackground(new Color(255, 85, 85));
                 modeSelector.setEnabled(false);
+                portField.setEnabled(false);
                 isRunning = true;
             }
         });
@@ -225,6 +237,21 @@ public class UI extends JFrame {
             logArea.append(t);
             logArea.setCaretPosition(logArea.getDocument().getLength());
         });
+    }
+
+    /** @return the port (1-65535) or 0 if invalid */
+    private int parsePort() {
+        try {
+            int port = Integer.parseInt(portField.getText().trim());
+            if (port < 1 || port > 65535) {
+                System.out.println("[ERROR] Port must be between 1 and 65535.");
+                return 0;
+            }
+            return port;
+        } catch (NumberFormatException e) {
+            System.out.println("[ERROR] Invalid port: " + portField.getText());
+            return 0;
+        }
     }
 
     public void showUI() { SwingUtilities.invokeLater(() -> setVisible(true)); }

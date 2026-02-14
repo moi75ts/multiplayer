@@ -1,6 +1,7 @@
 package matlabmaster.multiplayer.listeners;
 
 import com.fs.starfarer.api.Global;
+import matlabmaster.multiplayer.MultiplayerLog;
 import matlabmaster.multiplayer.client.Client;
 import matlabmaster.multiplayer.server.Server;
 
@@ -23,11 +24,11 @@ public class MultiplayerWatchdog extends Thread {
                 if (Objects.equals(Global.getCurrentState().toString(), "TITLE")) {
                     if (server.isRunning) {
                         server.stop();
-                        System.out.println("[SERVER SHUTDOWN] game is on main menu");
+                        MultiplayerLog.log().info("[SERVER SHUTDOWN] game is on main menu");
                     }
                     if (client.isConnected()) {
                         client.disconnect();
-                        System.out.println("[DISCONNECT] game is on main menu");
+                        MultiplayerLog.log().info("[DISCONNECT] game is on main menu");
                     }
                 }
                 // Add a sleep to prevent busy looping and high CPU usage

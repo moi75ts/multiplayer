@@ -105,7 +105,7 @@ public class FleetSerializer {
                 patchAbilities(fleet, subDiff);
                 break;
             case "assignment":
-                System.out.println("[assignment] " + subDiff);
+                matlabmaster.multiplayer.MultiplayerLog.log().debug("[assignment] " + subDiff);
         }
     }
 

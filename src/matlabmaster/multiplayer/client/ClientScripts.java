@@ -4,6 +4,7 @@ import com.fs.starfarer.api.EveryFrameScript;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.CampaignFleetAPI;
 import com.fs.starfarer.campaign.Faction;
+import matlabmaster.multiplayer.MultiplayerLog;
 import matlabmaster.multiplayer.updates.FleetSync;
 import matlabmaster.multiplayer.utils.FleetHelper;
 import matlabmaster.multiplayer.utils.FleetSerializer;
@@ -31,7 +32,7 @@ public class ClientScripts implements EveryFrameScript {
             @Override
             public void onDisconnected() {
                 messageQueue.clear();
-                System.out.println("[CLIENT] CLEARING MESSAGE QUEUE.");
+                MultiplayerLog.log().info("CLEARING MESSAGE QUEUE.");
             }
 
             @Override
@@ -40,7 +41,7 @@ public class ClientScripts implements EveryFrameScript {
                     // On transforme la string en JSON immédiatement et on l'ajoute à la queue
                     messageQueue.add(new JSONObject(msg));
                 } catch (Exception e) {
-                    System.err.println("[CLIENT-ERROR] JSON FORMAT ERROR: " + e.getMessage());
+                    MultiplayerLog.log().error("JSON FORMAT ERROR: " + e.getMessage());
                 }
             }
         });
@@ -99,7 +100,7 @@ public class ClientScripts implements EveryFrameScript {
                         fleetSync.handleRemoteFleetUpdate(message);
                     }else{
                         //usually called when a fleet dies and respawn
-                        System.out.println("[ERROR] playerFleetUpdate : unknown fleet");
+                        MultiplayerLog.log().error("playerFleetUpdate : unknown fleet");
                         JSONObject packet = new JSONObject();
                         packet.put("commandId","requestPlayerFleetSnapshot");
                         packet.put("to",message.getString("from"));
@@ -112,17 +113,17 @@ public class ClientScripts implements EveryFrameScript {
                     for(i = 0; i < message.getJSONArray("fleets").length() ; i ++){
                         FleetSerializer.unSerializeFleet((JSONObject) message.getJSONArray("fleets").get(i),Global.getFactory().createEmptyFleet(Faction.NO_FACTION, true));
                     }
-                    System.out.println("[CLIENT] added " + i + " fleets");
+                    MultiplayerLog.log().info("added " + i + " fleets");
                     break;
                 case "fleetSnapshot":
                     FleetSerializer.unSerializeFleet(message.getJSONObject("fleet"),Global.getFactory().createEmptyFleet(Faction.NO_FACTION,true));
                     break;
                 case "playerLeft":
                     FleetHelper.removeFleetById(message.getString("id"));
-                    System.out.println("[LEFT] " + message.getString("id") + " left the game");
+                    MultiplayerLog.log().info("[LEFT] " + message.getString("id") + " left the game");
                     break;
                 case "playerJoined":
-                    System.out.println("[JOINED] " + message.getString("id") + " joined the game");
+                    MultiplayerLog.log().info("[JOINED] " + message.getString("id") + " joined the game");
                     break;
                 case "globalFleetsUpdate":
                     //modifying msg to match what fleetSync.handleRemoteFleetUpdate expect
@@ -141,18 +142,18 @@ public class ClientScripts implements EveryFrameScript {
                             JSONObject packet = new JSONObject();
                             packet.put("commandId","requestFleetSnapshot");
                             packet.put("fleetId",fleetId);
-                            System.out.println("[WARN] globalFleetsUpdate : unknown fleet " + fleetId);
+                            MultiplayerLog.log().warn("globalFleetsUpdate : unknown fleet " + fleetId);
                             client.send(packet.toString());
                         }
                     }
                     break;
                 case "youAreAuthority":
                     client.isAuthority = true;
-                    System.out.println("[DEBUG] you are the authority");
+                    MultiplayerLog.log().debug("you are the authority");
                     break;
                 case "youAreNoLongerAuthority":
                     client.isAuthority = false;
-                    System.out.println("[DEBUG] you are no longer the authority");
+                    MultiplayerLog.log().debug("you are no longer the authority");
                     break;
                 case "requestFleetSnapshot":
                     JSONObject packet = new JSONObject();
@@ -164,7 +165,7 @@ public class ClientScripts implements EveryFrameScript {
                 case "handleFleetSnapshotRequest":
                     //noinspection DuplicateBranchesInSwitch
                     FleetSerializer.unSerializeFleet(message.getJSONObject("fleet"),Global.getFactory().createEmptyFleet(Faction.NO_FACTION,true));
-                    System.out.println("new fleet");
+                    MultiplayerLog.log().info("new fleet");
                     break;
                 case "requestPlayerFleetSnapshot":
                     packet = new JSONObject();
@@ -174,11 +175,11 @@ public class ClientScripts implements EveryFrameScript {
                     client.send(packet.toString());
                     break;
                 default:
-                    System.out.println("[CLIENT] unknown command: " + commandId);
+                    MultiplayerLog.log().warn("unknown command: " + commandId);
                     break;
             }
         } catch (Exception e) {
-            System.err.println("[ERROR] Exception in processMessage: " + e.getMessage() + "\n" + Arrays.toString(e.getStackTrace()) + message.toString());
+            MultiplayerLog.log().error("Exception in processMessage: " + e.getMessage() + " " + message.toString(), e);
         }
     }
 
@@ -189,7 +190,7 @@ public class ClientScripts implements EveryFrameScript {
                 fleetSync.sendGlobalFleetsUpdate(client);
             }
         } catch (Exception e) {
-            System.err.println("[ERROR] Unable to send own fleet update: " + e.getMessage());
+            MultiplayerLog.log().error("Unable to send own fleet update: " + e.getMessage(), e);
         }
     }
 }

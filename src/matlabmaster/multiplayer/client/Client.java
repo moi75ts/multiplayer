@@ -1,6 +1,7 @@
 package matlabmaster.multiplayer.client;
 
 import com.fs.starfarer.api.Global;
+import matlabmaster.multiplayer.MultiplayerLog;
 import matlabmaster.multiplayer.UserError;
 import matlabmaster.multiplayer.utils.FleetHelper;
 import matlabmaster.multiplayer.utils.FleetSerializer;
@@ -51,27 +52,27 @@ public class Client {
         clientId = "User-" + socket.getLocalPort();
 
         // SUCCESS MESSAGE
-        System.out.println("[CLIENT] CONNECTED SUCCESSFULLY TO SERVER " + ip + ":" + port);
+        MultiplayerLog.log().info("CONNECTED SUCCESSFULLY TO SERVER " + ip + ":" + port);
         if(!isSelfHosted){
             try {
                 //send our fleet to the server so that it knows about it
                 JSONObject packet = new JSONObject();
-                System.out.println("[CLIENT] SENDING PLAYER FLEET TO SERVER");
+                MultiplayerLog.log().info("SENDING PLAYER FLEET TO SERVER");
                 packet.put("commandId","fleetSnapshot");
                 packet.put("fleet",FleetSerializer.serializeFleet(Global.getSector().getPlayerFleet()));
                 send(packet.toString());
 
                 //prepare for all fleet syncing
-                System.out.println("[CLIENT] DESTROYING EXISTING FLEETS");
+                MultiplayerLog.log().info("DESTROYING EXISTING FLEETS");
                 FleetHelper.killAllFleetsExceptPlayer();
 
                 //ask for all the sectors fleet snapshot
-                System.out.println("[CLIENT] REQUESTING FLEETS SNAPSHOT");
+                MultiplayerLog.log().info("REQUESTING FLEETS SNAPSHOT");
                 packet = new JSONObject();
                 packet.put("commandId","requestAllFleetsSnapshot");
                 send(packet.toString());
             }catch (Exception e){
-                System.out.println("[ERROR] Handshake failed " + Arrays.toString(e.getStackTrace()));
+                MultiplayerLog.log().error("Handshake failed", e);
                 disconnect();
             }
         }
@@ -84,7 +85,7 @@ public class Client {
                         try {
                             listener.onMessageReceived(line);
                         } catch (Exception e) {
-                            System.err.println("[ERROR] Exception in listener.onMessageReceived(): " + e.getMessage());
+                            MultiplayerLog.log().error("Exception in listener.onMessageReceived(): " + e.getMessage(), e);
                         }
                     }
                 }
@@ -105,7 +106,7 @@ public class Client {
         if (isConnected) {
             isSelfHosted = false;
             isConnected = false;
-            System.out.println("[CLIENT] DISCONNECTED FROM SERVER.");
+            MultiplayerLog.log().info("DISCONNECTED FROM SERVER.");
             try { if (socket != null) socket.close(); } catch (IOException e) {}
 
             // Notify ALL listeners
@@ -113,8 +114,7 @@ public class Client {
                 try {
                     listener.onDisconnected();
                 } catch (Exception e) {
-                    System.err.println("[ERROR] Exception in listener.onDisconnected(): " + e.getMessage());
-                    e.printStackTrace();
+                    MultiplayerLog.log().error("Exception in listener.onDisconnected(): " + e.getMessage(), e);
                 }
             }
         }

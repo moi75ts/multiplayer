@@ -3,11 +3,9 @@ package matlabmaster.multiplayer.ui;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
-import java.io.OutputStream;
-import java.io.PrintStream;
-import java.util.Arrays;
 
 import com.fs.starfarer.api.Global;
+import matlabmaster.multiplayer.MultiplayerLog;
 import matlabmaster.multiplayer.UserError;
 import matlabmaster.multiplayer.server.Server;
 import matlabmaster.multiplayer.client.Client;
@@ -35,14 +33,13 @@ public class UI extends JFrame {
         client.addListener(new Client.ClientListener() {
             @Override
             public void onDisconnected() {
-                System.out.println("[DEBUG] UI onDisconnected() callback triggered!");
+                MultiplayerLog.log().debug("UI onDisconnected() callback triggered!");
                 try {
                     isRunning = false;
                     updateButtonStyle();
-                    System.out.println("[DEBUG] updateButtonStyle() completed");
+                    MultiplayerLog.log().debug("updateButtonStyle() completed");
                 } catch (Exception e) {
-                    System.err.println("[ERROR] Exception in onDisconnected: " + e.getMessage());
-                    e.printStackTrace();
+                    MultiplayerLog.log().error("Exception in onDisconnected: " + e.getMessage(), e);
                 }
             }
             @Override
@@ -112,7 +109,7 @@ public class UI extends JFrame {
 
         add(mainPanel);
         updateButtonStyle();
-        redirectSystemOut();
+        MultiplayerLog.setUILogSink(this::updateLogArea);
     }
 
     private void toggleMode() {
@@ -132,7 +129,7 @@ public class UI extends JFrame {
                 server.start();
                 isRunning = true;
                 final int connectPort = port;
-                System.out.println("[SYSTEM] SERVER STARTED AS " + (asCurrentGame ? "HOSTED GAME" : "DEDICATED"));
+                MultiplayerLog.log().info("SERVER STARTED AS " + (asCurrentGame ? "HOSTED GAME" : "DEDICATED"));
 
                 if (asCurrentGame) {
                     // On lance la connexion client dans un thread séparé avec un petit délai
@@ -143,7 +140,7 @@ public class UI extends JFrame {
                             client.connect("127.0.0.1", connectPort);
                             updateButtonStyle();
                         } catch (Exception ex) {
-                            System.err.println("[ERROR] FAILURE TO AUTO CONNECT : " + ex.getMessage());
+                            MultiplayerLog.log().error("FAILURE TO AUTO CONNECT : " + ex.getMessage());
                             client.isSelfHosted = false;
                             // Si l'auto-connexion échoue, on peut choisir d'arrêter le serveur ou pas
                         }
@@ -154,9 +151,9 @@ public class UI extends JFrame {
                 stopAll();
             }
         }catch (UserError e){
-            System.out.println(e.getMessage());
+            MultiplayerLog.log().warn(e.getMessage());
         }catch (Exception e){
-            System.out.println("[ERROR] server crashed");
+            MultiplayerLog.log().error("server crashed", e);
         }
 
     }
@@ -172,10 +169,10 @@ public class UI extends JFrame {
                     isRunning = true;
                     updateButtonStyle();
                 }catch (UserError e){
-                    System.out.println(e.getMessage());
+                    MultiplayerLog.log().warn(e.getMessage());
                 }
                 catch (Exception ex) {
-                    System.err.println("[ERREUR] UNABLE TO CONNECT." + Arrays.toString(ex.getStackTrace()));
+                    MultiplayerLog.log().error("UNABLE TO CONNECT.", ex);
                     client.disconnect();
                 }
             }).start();
@@ -223,15 +220,6 @@ public class UI extends JFrame {
         });
     }
 
-    // --- (Gardez vos méthodes utilitaires redirect et updateLogArea identiques) ---
-    private void redirectSystemOut() {
-        PrintStream ps = new PrintStream(new OutputStream() {
-            @Override public void write(int b) { updateLogArea(String.valueOf((char) b)); }
-            @Override public void write(byte[] b, int off, int len) { updateLogArea(new String(b, off, len)); }
-        });
-        System.setOut(ps); System.setErr(ps);
-    }
-
     private void updateLogArea(String t) {
         SwingUtilities.invokeLater(() -> {
             logArea.append(t);
@@ -244,12 +232,12 @@ public class UI extends JFrame {
         try {
             int port = Integer.parseInt(portField.getText().trim());
             if (port < 1 || port > 65535) {
-                System.out.println("[ERROR] Port must be between 1 and 65535.");
+                MultiplayerLog.log().error("Port must be between 1 and 65535.");
                 return 0;
             }
             return port;
         } catch (NumberFormatException e) {
-            System.out.println("[ERROR] Invalid port: " + portField.getText());
+            MultiplayerLog.log().error("Invalid port: " + portField.getText());
             return 0;
         }
     }

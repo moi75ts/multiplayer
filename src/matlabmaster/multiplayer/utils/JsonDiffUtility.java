@@ -1,5 +1,6 @@
 package matlabmaster.multiplayer.utils;
 
+import matlabmaster.multiplayer.MultiplayerLog;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.json.JSONException;
@@ -99,9 +100,8 @@ public class JsonDiffUtility {
                 obj.put(key, value);
             }
         } catch (JSONException e) {
-            // In a sandbox, we usually log to stderr or a custom logger.
-            // We ignore it here to keep the sync flowing.
-            System.err.println("JSON Sync Error: " + e.getMessage());
+            // We log but keep the sync flowing.
+            MultiplayerLog.log().error("JSON Sync Error: " + e.getMessage(), e);
         }
     }
 }

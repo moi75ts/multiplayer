@@ -8,15 +8,11 @@ import matlabmaster.multiplayer.listeners.MultiplayerWatchdog;
 import matlabmaster.multiplayer.server.Server;
 import matlabmaster.multiplayer.server.ServerScripts;
 import matlabmaster.multiplayer.ui.UI;
-import org.apache.log4j.Level;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 import java.util.Objects;
 
 
 public class MultiplayerModPlugin extends BaseModPlugin {
-    private static final Logger LOGGER = LogManager.getLogger("multiplayer");
 
     // Unique Client and Server Instance
     private static Server serverInstance;
@@ -44,7 +40,7 @@ public class MultiplayerModPlugin extends BaseModPlugin {
             new MultiplayerWatchdog(clientInstance, serverInstance).start();
         }
 
-        LOGGER.log(Level.INFO, "Multiplayer mod UI initialized");
+        MultiplayerLog.log().info("Multiplayer mod UI initialized");
     }
 
     @Override
@@ -60,7 +56,7 @@ public class MultiplayerModPlugin extends BaseModPlugin {
             serverScriptsInstance = new ServerScripts(serverInstance);
         }
         Global.getSector().addTransientScript(serverScriptsInstance);
-        System.out.println("registered scripts");
+        MultiplayerLog.log().info("registered scripts");
     }
 
     public static Server getServer() {

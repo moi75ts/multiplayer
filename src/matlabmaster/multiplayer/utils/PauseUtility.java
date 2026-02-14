@@ -1,6 +1,7 @@
 package matlabmaster.multiplayer.utils;
 
 import com.fs.starfarer.api.Global;
+import matlabmaster.multiplayer.MultiplayerLog;
 import matlabmaster.multiplayer.client.Client;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -26,7 +27,7 @@ public class PauseUtility {
                 }
             }
         }catch (JSONException e){
-            System.out.println("Error in the pause utility");
+            MultiplayerLog.log().error("Error in the pause utility", e);
         }
     }
 }

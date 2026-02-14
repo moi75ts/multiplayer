@@ -8,6 +8,7 @@ import java.util.concurrent.*;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.econ.EconomyAPI;
 import com.fs.starfarer.api.impl.campaign.ids.Commodities;
+import matlabmaster.multiplayer.MultiplayerLog;
 import matlabmaster.multiplayer.UserError;
 import matlabmaster.multiplayer.utils.FleetHelper;
 import org.json.JSONArray;
@@ -51,7 +52,7 @@ public class Server {
         new Thread(() -> {
             try {
                 serverSocket = new ServerSocket(port);
-                System.out.println("[SERVER] Server started on port " + port);
+                MultiplayerLog.log().info("Server started on port " + port);
 
                 while (isRunning) {
                     try {
@@ -63,22 +64,22 @@ public class Server {
                         clients.put(clientId, handler);
                         JSONObject packet = new JSONObject();
 
-                        System.out.println("[JOINED] " + clientId + " is connected");
+                        MultiplayerLog.log().info("[JOINED] " + clientId + " is connected");
                         try {
                             packet = new JSONObject();
                             packet.put("commandId","playerJoined");
                             packet.put("id",clientId);
                         }catch (Exception e){
-                            System.out.println("[ERROR] failed to broadcast player joined");
+                            MultiplayerLog.log().error("failed to broadcast player joined");
                         }
                         threadPool.execute(handler);
 
                     } catch (IOException e) {
-                        if (isRunning) System.err.println("[ERROR] Accept : " + e.getMessage());
+                        if (isRunning) MultiplayerLog.log().error("Accept : " + e.getMessage());
                     }
                 }
             } catch (IOException e) {
-                if (isRunning) System.err.println("[ERROR] Port " + port + " unavailable.");
+                if (isRunning) MultiplayerLog.log().error("Port " + port + " unavailable.");
             } finally {
                 internalStop();
             }
@@ -88,7 +89,7 @@ public class Server {
     public synchronized void stop() {
         if (!isRunning) return;
         isRunning = false;
-        System.out.println("[SERVER] SERVER STOPPING...");
+        MultiplayerLog.log().info("SERVER STOPPING...");
         internalStop();
     }
 
@@ -104,7 +105,7 @@ public class Server {
             clients.clear();
             if (threadPool != null) threadPool.shutdownNow();
 
-            System.out.println("[SERVER] SERVER STOPPED.");
+            MultiplayerLog.log().info("SERVER STOPPED.");
 
             if (listener != null) {
                 listener.onServerStopped();
@@ -159,26 +160,26 @@ public class Server {
                     break;
                 case "paused":
                     clients.get(clientId).isPaused = true;
-                    System.out.println("[INFO] client " + clientId + " has paused");
+                    MultiplayerLog.log().info("client " + clientId + " has paused");
                     if(clients.get(clientId) == authority){
                         authorityManager(this);
                     }
                     break;
                 case "unpaused":
                     clients.get(clientId).isPaused = false;
-                    System.out.println("[INFO] client " + clientId + " has unpaused");
+                    MultiplayerLog.log().info("client " + clientId + " has unpaused");
                     break;
                 case "requestPlayerFleetSnapshot":
                     //relay the information to concerned client
                     clients.get(json.getString("to")).sendMessage(json.toString());
                     break;
                 default:
-                    System.out.println("[SERVER] Unknown command: " + commandId);
+                    MultiplayerLog.log().warn("Unknown command: " + commandId);
                     break;
             }
 
         } catch (Exception e) {
-            System.err.println("[ERROR] JSON Error from " + clientId + " : " + e.getMessage());
+            MultiplayerLog.log().error("JSON Error from " + clientId + " : " + e.getMessage(), e);
         }
     }
 
@@ -266,7 +267,7 @@ public class Server {
                     packet.put("id",clientId);
                     broadcast(String.valueOf(packet));
                 }catch (Exception e){
-                    System.out.println("Failed to broadcast playerLeft of leaving player");
+                    MultiplayerLog.log().error("Failed to broadcast playerLeft of leaving player", e);
                 }
             }
         }
@@ -286,7 +287,7 @@ public class Server {
                 try {
                     authorityManager(server);
                 } catch (JSONException e) {
-                    System.err.println("[ERROR] Failed to reassign authority after disconnect: " + e.getMessage());
+                    MultiplayerLog.log().error("Failed to reassign authority after disconnect: " + e.getMessage(), e);
                 }
             }
             

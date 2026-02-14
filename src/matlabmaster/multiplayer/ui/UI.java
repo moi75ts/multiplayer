@@ -172,7 +172,7 @@ public class UI extends JFrame {
                     MultiplayerLog.log().warn(e.getMessage());
                 }
                 catch (Exception ex) {
-                    MultiplayerLog.log().error("UNABLE TO CONNECT.", ex);
+                    MultiplayerLog.log().error("UNABLE TO CONNECT. " + ex.toString(), ex);
                     client.disconnect();
                 }
             }).start();

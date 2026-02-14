@@ -9,10 +9,8 @@ import matlabmaster.multiplayer.updates.FleetSync;
 import matlabmaster.multiplayer.utils.FleetHelper;
 import matlabmaster.multiplayer.utils.FleetSerializer;
 import matlabmaster.multiplayer.utils.PauseUtility;
-import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.util.Arrays;
 import java.util.Iterator;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -65,7 +63,7 @@ public class ClientScripts implements EveryFrameScript {
 
         //handle the game pausing , disable classic in game pause
         //if the game is in a dialog inform the server
-        PauseUtility.clientPauseUtility(client);
+        PauseUtility.clientPauseUtility(client,fleetSync);
 
         // --- 1. TRAITEMENT DES MESSAGES REÇUS (À CHAQUE FRAME) ---
         // On traite TOUS les messages en attente pour éviter la latence

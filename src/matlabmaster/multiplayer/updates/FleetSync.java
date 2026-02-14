@@ -26,6 +26,7 @@ public class FleetSync
             JSONObject packet = new JSONObject();
             packet.put("commandId","playerFleetUpdate");
             packet.put("fleetId", newFleet.getString("id")); // Root ID
+            packet.put("from",client.clientId);
             packet.put("changes", diffs);
             client.send(String.valueOf(packet));
         }
@@ -36,7 +37,7 @@ public class FleetSync
     }
 
     public void sendGlobalFleetsUpdate(Client client) throws JSONException {
-        JSONArray snapshot = FleetHelper.getFleetsSnapshot();
+        JSONArray snapshot = FleetHelper.getNPCFleetsSnapshot();
         JSONObject currentGlobalFleets = new JSONObject();
 
         // 1. Convert the Array snapshot to a Map keyed by Fleet ID

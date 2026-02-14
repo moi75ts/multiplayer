@@ -21,6 +21,7 @@ public class Client {
     public boolean isSelfHosted = false;
     public boolean isAuthority = false;
     public boolean wasPaused = false;
+    public String clientId;
 
     public interface ClientListener {
         void onDisconnected();
@@ -47,6 +48,7 @@ public class Client {
 
         Global.getSector().getPlayerFleet().setId("User-" + socket.getLocalPort());
         isConnected = true;
+        clientId = "User-" + socket.getLocalPort();
 
         // SUCCESS MESSAGE
         System.out.println("[CLIENT] CONNECTED SUCCESSFULLY TO SERVER " + ip + ":" + port);

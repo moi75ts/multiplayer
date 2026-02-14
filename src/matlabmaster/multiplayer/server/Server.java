@@ -61,10 +61,11 @@ public class Server {
                         String clientId = "User-" + socket.getPort();
                         ClientHandler handler = new ClientHandler(socket, clientId, this);
                         clients.put(clientId, handler);
+                        JSONObject packet = new JSONObject();
 
                         System.out.println("[JOINED] " + clientId + " is connected");
-                        JSONObject packet = new JSONObject();
                         try {
+                            packet = new JSONObject();
                             packet.put("commandId","playerJoined");
                             packet.put("id",clientId);
                         }catch (Exception e){
@@ -167,8 +168,12 @@ public class Server {
                     clients.get(clientId).isPaused = false;
                     System.out.println("[INFO] client " + clientId + " has unpaused");
                     break;
+                case "requestPlayerFleetSnapshot":
+                    //relay the information to concerned client
+                    clients.get(json.getString("to")).sendMessage(json.toString());
+                    break;
                 default:
-                    System.out.println("[INFO] Unknown command: " + commandId);
+                    System.out.println("[SERVER] Unknown command: " + commandId);
                     break;
             }
 

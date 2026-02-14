@@ -312,6 +312,13 @@ public class FleetSerializer {
         fleet.setId(serializedFleet.getString("id"));
         fleet.setFaction(serializedFleet.getString("factionId"));
         fleet.setName(serializedFleet.getString("name"));
+
+        //this little bit of code is used to identify the other players fleet
+        //so that their positions are not send via the globalFleetSync
+        if(serializedFleet.getBoolean("isPlayerFleet")){
+            fleet.addTag("playerFleet");
+        }
+
         if(Objects.equals(serializedFleet.getString("location"), "hyperspace")){
             fleet.setContainingLocation(Global.getSector().getHyperspace());
             Global.getSector().getHyperspace().addEntity(fleet); // the previous line doesn't actually spawn it in location

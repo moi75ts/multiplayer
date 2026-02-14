@@ -98,8 +98,13 @@ public class ClientScripts implements EveryFrameScript {
                     if(Global.getSector().getEntityById(message.getString("fleetId")) instanceof CampaignFleetAPI){
                         fleetSync.handleRemoteFleetUpdate(message);
                     }else{
+                        //usually called when a fleet dies and respawn
                         System.out.println("[ERROR] playerFleetUpdate : unknown fleet");
-                        //todo fleet is unknown
+                        JSONObject packet = new JSONObject();
+                        packet.put("commandId","requestPlayerFleetSnapshot");
+                        packet.put("to",message.getString("from"));
+                        packet.put("from",client.clientId);
+                        client.send(packet.toString());
                     }
                     break;
                 case "handleAllFleetsSnapshot":
@@ -161,8 +166,15 @@ public class ClientScripts implements EveryFrameScript {
                     FleetSerializer.unSerializeFleet(message.getJSONObject("fleet"),Global.getFactory().createEmptyFleet(Faction.NO_FACTION,true));
                     System.out.println("new fleet");
                     break;
+                case "requestPlayerFleetSnapshot":
+                    packet = new JSONObject();
+                    packet.put("commandId","handleFleetSnapshotRequest");
+                    packet.put("to",message.getString("from"));
+                    packet.put("fleet",FleetSerializer.serializeFleet(Global.getSector().getPlayerFleet()));
+                    client.send(packet.toString());
+                    break;
                 default:
-                    System.out.println("[ERROR] unknown command: " + commandId);
+                    System.out.println("[CLIENT] unknown command: " + commandId);
                     break;
             }
         } catch (Exception e) {

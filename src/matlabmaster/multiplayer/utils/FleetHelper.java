@@ -3,7 +3,6 @@ package matlabmaster.multiplayer.utils;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.CampaignFleetAPI;
 import com.fs.starfarer.api.campaign.LocationAPI;
-import com.fs.starfarer.api.campaign.SectorEntityToken;
 import org.json.JSONArray;
 import org.json.JSONException;
 
@@ -33,6 +32,20 @@ public class FleetHelper {
         }
         return fleets;
     }
+
+    public static JSONArray getNPCFleetsSnapshot() throws JSONException {
+        JSONArray fleets = new JSONArray();
+        for(LocationAPI location : Global.getSector().getAllLocations()){
+            for (CampaignFleetAPI fleet : location.getFleets()){
+                if(!fleet.isStationMode() && !fleet.isPlayerFleet() && !fleet.hasTag("playerFleet")){ //sometimes stations are considered fleets
+                    fleets.put(FleetSerializer.serializeFleet(fleet));
+                }
+            }
+        }
+        return fleets;
+    }
+
+
     public static void removeFleetById(String id){
         Global.getSector().getEntityById(id).getContainingLocation().removeEntity(Global.getSector().getEntityById(id));
     }

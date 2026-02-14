@@ -10,6 +10,8 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.Iterator;
+
 public class FleetSync
 {
     private JSONObject lastTickFleet = new JSONObject();
@@ -17,7 +19,8 @@ public class FleetSync
 
     public void sendOwnFleetUpdate(Client client) throws JSONException {
         JSONObject newFleet = FleetSerializer.serializeFleet(Global.getSector().getPlayerFleet());
-        JSONObject diffs = JsonDiffUtility.getDifferences(lastTickFleet,newFleet);
+        JSONObject diffs = JsonDiffUtility.getDifferences(lastTickFleet, newFleet);
+        FleetSerializer.replaceWeaponGroupsDiffsWithFullState(diffs, newFleet);
         lastTickFleet = newFleet;
         if (diffs.length() > 0) {
             JSONObject packet = new JSONObject();
@@ -49,6 +52,15 @@ public class FleetSync
         // - "REMOVED" actions for missing keys (despawned fleets)
         // - Nested updates for existing fleets
         JSONObject diffs = JsonDiffUtility.getDifferences(lastTickGlobalFleet, currentGlobalFleets);
+        for (Iterator<?> it = diffs.keys(); it.hasNext(); ) {
+            String fleetId = (String) it.next();
+            if (!currentGlobalFleets.has(fleetId)) continue;
+            JSONObject fleetDiff = diffs.optJSONObject(fleetId);
+            // Only replace weapon groups in nested fleet updates, not in ADDED/REMOVED instructions
+            if (fleetDiff != null && !fleetDiff.has("action")) {
+                FleetSerializer.replaceWeaponGroupsDiffsWithFullState(fleetDiff, currentGlobalFleets.getJSONObject(fleetId));
+            }
+        }
 
         // 3. Update local state
         lastTickGlobalFleet = currentGlobalFleets;

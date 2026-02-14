@@ -284,6 +284,30 @@ public class FleetSerializer {
         return serializedFleet;
     }
 
+    /**
+     * Replaces any weaponGroups diff (ADDED/REMOVED/UPDATE per group) with the full
+     * weapon groups map from the new serialized fleet, so the receiver can clear-and-apply.
+     * Call this on the fleet diff after getDifferences() and before sending.
+     */
+    public static void replaceWeaponGroupsDiffsWithFullState(JSONObject fleetDiff, JSONObject newSerializedFleet) {
+        if (!fleetDiff.has("ships") || !newSerializedFleet.has("ships")) return;
+        try {
+            JSONObject shipsDiff = fleetDiff.getJSONObject("ships");
+            JSONObject newShips = newSerializedFleet.getJSONObject("ships");
+            Iterator<?> shipIds = shipsDiff.keys();
+            while (shipIds.hasNext()) {
+                String shipId = (String) shipIds.next();
+                if (!newShips.has(shipId)) continue;
+                JSONObject shipDiff = shipsDiff.optJSONObject(shipId);
+                if (shipDiff == null || !shipDiff.has("weaponGroups")) continue;
+                JSONObject fullWeaponGroups = newShips.getJSONObject(shipId).optJSONObject("weaponGroups");
+                if (fullWeaponGroups != null) {
+                    shipDiff.put("weaponGroups", fullWeaponGroups);
+                }
+            }
+        } catch (JSONException ignored) { }
+    }
+
     public static void unSerializeFleet(JSONObject serializedFleet, CampaignFleetAPI fleet) throws JSONException {
         fleet.setId(serializedFleet.getString("id"));
         fleet.setFaction(serializedFleet.getString("factionId"));
@@ -562,33 +586,37 @@ public class FleetSerializer {
         }
     }
 
-    private static void patchWeaponGroups(ShipVariantAPI variant, JSONObject diff) throws JSONException {
-        Iterator<?> keys = diff.keys();
-        while (keys.hasNext()) {
-            String indexStr = (String) keys.next();
-            int index = Integer.parseInt(indexStr);
-            Object delta = diff.get(indexStr);
+    /**
+     * Replaces all weapon groups with the full state from the given map.
+     * Expects the same format as serialization: keys "0", "1", "2", ... and each value
+     * is { "type", "autofire", "slots" }. Clears existing groups then applies in index order.
+     */
+    private static void patchWeaponGroups(ShipVariantAPI variant, JSONObject fullWeaponGroups) throws JSONException {
+        List<WeaponGroupSpec> currentGroups = variant.getWeaponGroups();
+        currentGroups.clear();
 
-            // If a group is ADDED or UPDATED, we rebuild that specific group
-            if (delta instanceof JSONObject instruction && instruction.has("value")) {
-                JSONObject groupData = instruction.getJSONObject("value");
+        List<Integer> indices = new ArrayList<>();
+        Iterator<?> keyIt = fullWeaponGroups.keys();
+        while (keyIt.hasNext()) {
+            String indexStr = (String) keyIt.next();
+            indices.add(Integer.parseInt(indexStr));
+        }
+        Collections.sort(indices);
 
-                // Note: Starsector groups are best managed by clearing and re-adding
-                // if you want to change a specific index.
-                List<WeaponGroupSpec> currentGroups = variant.getWeaponGroups();
-                WeaponGroupSpec newGroup = new WeaponGroupSpec();
-                newGroup.setType(WeaponGroupType.valueOf(groupData.getString("type")));
-                newGroup.setAutofireOnByDefault(groupData.getBoolean("autofire"));
-                JSONArray slots = groupData.getJSONArray("slots");
-                for (int i = 0; i < slots.length(); i++) newGroup.addSlot(slots.getString(i));
-
-                // Replace or add
-                if (index < currentGroups.size()) {
-                    currentGroups.set(index, newGroup);
-                } else {
-                    variant.addWeaponGroup(newGroup);
-                }
+        for (int index : indices) {
+            String indexStr = String.valueOf(index);
+            Object raw = fullWeaponGroups.opt(indexStr);
+            if (!(raw instanceof JSONObject groupData) || !groupData.has("type") || !groupData.has("slots")) {
+                continue;
             }
+            WeaponGroupSpec spec = new WeaponGroupSpec();
+            spec.setType(WeaponGroupType.valueOf(groupData.getString("type")));
+            spec.setAutofireOnByDefault(groupData.optBoolean("autofire", false));
+            JSONArray slots = groupData.getJSONArray("slots");
+            for (int i = 0; i < slots.length(); i++) {
+                spec.addSlot(slots.getString(i));
+            }
+            variant.addWeaponGroup(spec);
         }
     }
 

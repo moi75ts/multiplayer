@@ -24,7 +24,6 @@ public class MultiplayerModPlugin extends BaseModPlugin {
     @Override
     public void onApplicationLoad() throws Exception {
         super.onApplicationLoad();
-
         // Unique instantiation of client / server
         if (serverInstance == null) {
             serverInstance = new Server(20603);
@@ -37,8 +36,7 @@ public class MultiplayerModPlugin extends BaseModPlugin {
         if (uiInstance == null) {
             uiInstance = new UI(serverInstance, clientInstance);
             uiInstance.showUI();
-            new MultiplayerWatchdog(clientInstance, serverInstance).start();
-        }
+            new MultiplayerWatchdog(clientInstance, serverInstance).start();}
 
         MultiplayerLog.log().info("Multiplayer mod UI initialized");
     }

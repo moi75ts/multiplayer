@@ -258,12 +258,12 @@ public class FleetSerializer {
         serializedFleet.put("id", fleet.getId());
 
         // Coordinates and Location
-        serializedFleet.put("locationX", ((int)(fleet.getLocation().getX() * 1000)) / 1000d);
-        serializedFleet.put("locationY", ((int)(fleet.getLocation().getY() * 1000)) / 1000d);
+        serializedFleet.put("locationX", ((int)(fleet.getLocation().getX() * 10000)) / 10000d);
+        serializedFleet.put("locationY", ((int)(fleet.getLocation().getY() * 10000)) / 10000d);
         serializedFleet.put("location", fleet.getContainingLocation().getId());
         serializedFleet.put("factionId", fleet.getFaction().getId());
-        serializedFleet.put("moveDestinationX", ((int)(fleet.getMoveDestination().getX() * 1000)) / 1000d);
-        serializedFleet.put("moveDestinationY", ((int)(fleet.getMoveDestination().getY() * 1000)) / 1000d);
+        serializedFleet.put("moveDestinationX", ((int)(fleet.getMoveDestination().getX() * 10000)) / 10000d);
+        serializedFleet.put("moveDestinationY", ((int)(fleet.getMoveDestination().getY() * 10000)) / 10000d);
         serializedFleet.put("isPlayerFleet", fleet.isPlayerFleet());
         serializedFleet.put("isTransponderOn", fleet.isTransponderOn());
         serializedFleet.put("aiMode",fleet.isAIMode());

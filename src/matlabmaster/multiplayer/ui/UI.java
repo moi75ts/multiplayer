@@ -130,7 +130,6 @@ public class UI extends JFrame {
                 isRunning = true;
                 final int connectPort = port;
                 MultiplayerLog.log().info("SERVER STARTED AS " + (asCurrentGame ? "HOSTED GAME" : "DEDICATED"));
-
                 if (asCurrentGame) {
                     // On lance la connexion client dans un thread séparé avec un petit délai
                     new Thread(() -> {

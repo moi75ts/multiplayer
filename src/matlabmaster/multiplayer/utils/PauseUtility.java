@@ -4,6 +4,7 @@ import com.fs.starfarer.api.Global;
 import matlabmaster.multiplayer.MultiplayerLog;
 import matlabmaster.multiplayer.client.Client;
 import matlabmaster.multiplayer.updates.FleetSync;
+import matlabmaster.multiplayer.updates.WorldSync;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -17,10 +18,13 @@ public class PauseUtility {
                     client.wasPaused = true;
                     JSONObject packet = new JSONObject();
                     packet.put("commandId","paused");
+
+                    //name update
                     String fleetName = Global.getSector().getPlayerFleet().getName();
                     fleetName += " [PAUSED]";//9 char long
                     Global.getSector().getPlayerFleet().setName(fleetName);
                     fleetSync.sendOwnFleetUpdate(client);//send the updated name
+
                     client.send(String.valueOf(packet));
                 }
             }else{
@@ -34,6 +38,11 @@ public class PauseUtility {
                         fleetName = fleetName.substring(0, fleetName.length() - " [paused]".length());
                         Global.getSector().getPlayerFleet().setName(fleetName);
                     }
+
+                    //update the orbits position
+                    WorldSync.requestOrbitSnapshotForLocation(Global.getSector().getPlayerFleet().getContainingLocation(),client);
+
+
                     client.send(packet.toString());
                 }
             }

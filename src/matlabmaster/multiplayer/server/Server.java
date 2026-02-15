@@ -2,19 +2,17 @@ package matlabmaster.multiplayer.server;
 
 import java.io.*;
 import java.net.*;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.*;
 
 import com.fs.starfarer.api.Global;
-import com.fs.starfarer.api.campaign.econ.EconomyAPI;
-import com.fs.starfarer.api.impl.campaign.ids.Commodities;
 import matlabmaster.multiplayer.MultiplayerLog;
 import matlabmaster.multiplayer.UserError;
 import matlabmaster.multiplayer.utils.FleetHelper;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.lwjgl.Sys;
 
 public class Server {
     private int port;
@@ -62,7 +60,7 @@ public class Server {
                         String clientId = "User-" + socket.getPort();
                         ClientHandler handler = new ClientHandler(socket, clientId, this);
                         clients.put(clientId, handler);
-                        JSONObject packet = new JSONObject();
+                        JSONObject packet;
 
                         MultiplayerLog.log().info("[JOINED] " + clientId + " is connected");
                         try {
@@ -173,6 +171,12 @@ public class Server {
                     //relay the information to concerned client
                     clients.get(json.getString("to")).sendMessage(json.toString());
                     break;
+                case "requestOrbitSnapshotForLocation":
+                    authority.sendMessage(json.toString());
+                    break;
+                case "handleOrbitSnapshotForLocation":
+                    clients.get(json.getString("to")).sendMessage(json.toString());
+                    break;
                 default:
                     MultiplayerLog.log().warn("Unknown command: " + commandId);
                     break;
@@ -249,7 +253,7 @@ public class Server {
         @Override
         public void run() {
             Thread.currentThread().setContextClassLoader(Server.class.getClassLoader());
-            try (BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream(), "UTF-8"))) {
+            try (BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8))) {
                 this.out = new PrintWriter(socket.getOutputStream(), true);
 
                 String input;

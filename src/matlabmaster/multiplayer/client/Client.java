@@ -3,12 +3,14 @@ package matlabmaster.multiplayer.client;
 import com.fs.starfarer.api.Global;
 import matlabmaster.multiplayer.MultiplayerLog;
 import matlabmaster.multiplayer.UserError;
+import matlabmaster.multiplayer.updates.WorldSync;
 import matlabmaster.multiplayer.utils.FleetHelper;
 import matlabmaster.multiplayer.utils.FleetSerializer;
 import org.json.JSONObject;
 
 import java.io.*;
 import java.net.*;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -19,6 +21,8 @@ public class Client {
     private BufferedReader in;
     private volatile boolean isConnected = false;
     private final CopyOnWriteArrayList<ClientListener> listeners = new CopyOnWriteArrayList<>();
+    private boolean savedIdleWhileWindowNotVisible = true;
+    private float savedCampaignSpeedupMult = 2f;
     public boolean isSelfHosted = false;
     public boolean isAuthority = false;
     public boolean wasPaused = false;
@@ -33,10 +37,6 @@ public class Client {
         listeners.add(listener);
     }
 
-    public void removeListener(ClientListener listener) {
-        listeners.remove(listener);
-    }
-
     public void connect(String ip, int port) throws IOException {
         if(Objects.equals(Global.getCurrentState().toString(), "TITLE")){
             throw new UserError("You cannot connect to a server while on the main menu, join any singleplayer game then try connecting");
@@ -45,11 +45,17 @@ public class Client {
         socket.connect(new InetSocketAddress(ip, port), 5000);
 
         out = new PrintWriter(socket.getOutputStream(), true);
-        in = new BufferedReader(new InputStreamReader(socket.getInputStream(), "UTF-8"));
+        in = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
 
         Global.getSector().getPlayerFleet().setId("User-" + socket.getLocalPort());
         isConnected = true;
         clientId = "User-" + socket.getLocalPort();
+
+        // Apply multiplayer-only settings (reverted on disconnect)
+        savedIdleWhileWindowNotVisible = Global.getSettings().getBoolean("idleWhileWindowNotVisible");
+        savedCampaignSpeedupMult = Global.getSettings().getFloat("campaignSpeedupMult");
+        Global.getSettings().setBoolean("idleWhileWindowNotVisible", false);
+        Global.getSettings().setFloat("campaignSpeedupMult", 1f);
 
         // SUCCESS MESSAGE
         MultiplayerLog.log().info("CONNECTED SUCCESSFULLY TO SERVER " + ip + ":" + port);
@@ -71,6 +77,11 @@ public class Client {
                 packet = new JSONObject();
                 packet.put("commandId","requestAllFleetsSnapshot");
                 send(packet.toString());
+
+                //ask for current location orbits
+                //todo update for all locations maybe if rly useful?
+                WorldSync.requestOrbitSnapshotForLocation(Global.getSector().getPlayerFleet().getContainingLocation(),this);
+
             }catch (Exception e){
                 MultiplayerLog.log().error("Handshake failed", e);
                 disconnect();
@@ -106,8 +117,10 @@ public class Client {
         if (isConnected) {
             isSelfHosted = false;
             isConnected = false;
+            Global.getSettings().setBoolean("idleWhileWindowNotVisible", savedIdleWhileWindowNotVisible);
+            Global.getSettings().setFloat("campaignSpeedupMult", savedCampaignSpeedupMult);
             MultiplayerLog.log().info("DISCONNECTED FROM SERVER.");
-            try { if (socket != null) socket.close(); } catch (IOException e) {}
+            try { if (socket != null) socket.close(); } catch (IOException e) {MultiplayerLog.log().error("Unknown IO exception" + Arrays.toString(e.getStackTrace()));}
 
             // Notify ALL listeners
             for (ClientListener listener : listeners) {

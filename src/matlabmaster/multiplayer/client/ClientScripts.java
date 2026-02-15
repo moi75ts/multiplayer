@@ -3,29 +3,34 @@ package matlabmaster.multiplayer.client;
 import com.fs.starfarer.api.EveryFrameScript;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.CampaignFleetAPI;
+import com.fs.starfarer.api.campaign.LocationAPI;
 import com.fs.starfarer.campaign.Faction;
 import matlabmaster.multiplayer.MultiplayerLog;
 import matlabmaster.multiplayer.updates.FleetSync;
+import matlabmaster.multiplayer.updates.WorldSync;
 import matlabmaster.multiplayer.utils.FleetHelper;
 import matlabmaster.multiplayer.utils.FleetSerializer;
 import matlabmaster.multiplayer.utils.PauseUtility;
+import matlabmaster.multiplayer.utils.WorldSerializer;
 import org.json.JSONObject;
 
 import java.util.Iterator;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class ClientScripts implements EveryFrameScript {
     private final Client client;
     private float timer = 0f;
     private final FleetSync fleetSync = new FleetSync();
+    private final WorldSync worldSync = new WorldSync();
 
-    // File d'attente sécurisée pour les messages venant du thread Client
+    // Message waitlist coming from client thread
     private static final ConcurrentLinkedQueue<JSONObject> messageQueue = new ConcurrentLinkedQueue<>();
 
     public ClientScripts(Client client) {
         this.client = client;
 
-        // On attache le listener pour remplir la queue
+        // Attaching listener to fill the queue
         this.client.addListener(new Client.ClientListener() {  // CHANGED FROM setListener TO addListener
             @Override
             public void onDisconnected() {
@@ -36,7 +41,7 @@ public class ClientScripts implements EveryFrameScript {
             @Override
             public void onMessageReceived(String msg) {
                 try {
-                    // On transforme la string en JSON immédiatement et on l'ajoute à la queue
+                    // Transform msg to JSON and add it to the queue
                     messageQueue.add(new JSONObject(msg));
                 } catch (Exception e) {
                     MultiplayerLog.log().error("JSON FORMAT ERROR: " + e.getMessage());
@@ -65,8 +70,8 @@ public class ClientScripts implements EveryFrameScript {
         //if the game is in a dialog inform the server
         PauseUtility.clientPauseUtility(client,fleetSync);
 
-        // --- 1. TRAITEMENT DES MESSAGES REÇUS (À CHAQUE FRAME) ---
-        // On traite TOUS les messages en attente pour éviter la latence
+        // --- 1. process received message every frame ---
+        // they are processed every frame to limit lag
         while (!messageQueue.isEmpty()) {
             JSONObject json = messageQueue.poll();
             if (json != null) {
@@ -74,7 +79,7 @@ public class ClientScripts implements EveryFrameScript {
             }
         }
 
-        // --- 2. ENVOI DES MISES À JOUR (TICKS 20 TPS) ---
+        // --- 2. send updates (TICKS 20 TPS) ---
         timer += amount;
         float INTERVAL = 0.05f;
         if (timer >= INTERVAL) {
@@ -84,32 +89,40 @@ public class ClientScripts implements EveryFrameScript {
     }
 
     /**
-     * Dispatcher pour les messages entrants.
-     * Exécuté dans le thread principal du jeu.
+     * Incoming message dispatcher.
+     * Executed in the main game thread
      */
     private void processMessage(JSONObject message) {
         try {
             if (!message.has("commandId")) return;
             String commandId = message.getString("commandId");
-
+            JSONObject packet;
             switch (commandId) {
                 case "playerFleetUpdate":
                     if(Global.getSector().getEntityById(message.getString("fleetId")) instanceof CampaignFleetAPI){
                         fleetSync.handleRemoteFleetUpdate(message);
                     }else{
-                        //usually called when a fleet dies and respawn
-                        MultiplayerLog.log().error("playerFleetUpdate : unknown fleet");
-                        JSONObject packet = new JSONObject();
-                        packet.put("commandId","requestPlayerFleetSnapshot");
-                        packet.put("to",message.getString("from"));
-                        packet.put("from",client.clientId);
-                        client.send(packet.toString());
+                        //only run if not paused because if the client is pause it will continuously ask for snapshots
+                        //and then try to spawn all of them when unpausing resulting in 1000 fleet spawning
+                        if(!Global.getSector().isPaused()){
+                            //usually called when a fleet dies and respawn
+                            MultiplayerLog.log().error("playerFleetUpdate : unknown fleet");
+                            packet = new JSONObject();
+                            packet.put("commandId","requestPlayerFleetSnapshot");
+                            packet.put("to",message.getString("from"));
+                            packet.put("from",client.clientId);
+                            client.send(packet.toString());
+                        }
                     }
                     break;
                 case "handleAllFleetsSnapshot":
                     int i;
                     for(i = 0; i < message.getJSONArray("fleets").length() ; i ++){
-                        FleetSerializer.unSerializeFleet((JSONObject) message.getJSONArray("fleets").get(i),Global.getFactory().createEmptyFleet(Faction.NO_FACTION, true));
+                        JSONObject unserializedFleet = (JSONObject) message.getJSONArray("fleets").get(i);
+                        if(Global.getSector().getEntityById(unserializedFleet.getString("id")) instanceof CampaignFleetAPI){
+                            ((CampaignFleetAPI) Global.getSector().getEntityById(unserializedFleet.getString("id"))).despawn();
+                        }
+                        FleetSerializer.unSerializeFleet(unserializedFleet,Global.getFactory().createEmptyFleet(Faction.NO_FACTION, true));
                     }
                     MultiplayerLog.log().info("added " + i + " fleets");
                     break;
@@ -137,11 +150,15 @@ public class ClientScripts implements EveryFrameScript {
                         if (Global.getSector().getEntityById(fleetId) instanceof CampaignFleetAPI) {
                             fleetSync.handleRemoteFleetUpdate(updateWrapper);
                         } else {
-                            JSONObject packet = new JSONObject();
-                            packet.put("commandId","requestFleetSnapshot");
-                            packet.put("fleetId",fleetId);
-                            MultiplayerLog.log().warn("globalFleetsUpdate : unknown fleet " + fleetId);
-                            client.send(packet.toString());
+                            if(!Global.getSector().isPaused()){
+                                //only run if not paused because if the client is pause it will continuously ask for snapshots
+                                //and then try to spawn all of them when unpausing resulting in 1000 fleet spawning
+                                packet = new JSONObject();
+                                packet.put("commandId","requestFleetSnapshot");
+                                packet.put("fleetId",fleetId);
+                                MultiplayerLog.log().warn("globalFleetsUpdate : unknown fleet " + fleetId);
+                                client.send(packet.toString());
+                            }
                         }
                     }
                     break;
@@ -154,16 +171,15 @@ public class ClientScripts implements EveryFrameScript {
                     MultiplayerLog.log().debug("you are no longer the authority");
                     break;
                 case "requestFleetSnapshot":
-                    JSONObject packet = new JSONObject();
+                    packet = new JSONObject();
                     packet.put("fleet",FleetSerializer.serializeFleet((CampaignFleetAPI) Global.getSector().getEntityById(message.getString("fleetId"))));
                     packet.put("commandId","handleFleetSnapshotRequest");
                     packet.put("to",message.getString("from"));
                     client.send(packet.toString());
                     break;
                 case "handleFleetSnapshotRequest":
-                    //noinspection DuplicateBranchesInSwitch
                     FleetSerializer.unSerializeFleet(message.getJSONObject("fleet"),Global.getFactory().createEmptyFleet(Faction.NO_FACTION,true));
-                    MultiplayerLog.log().info("new fleet");
+                    MultiplayerLog.log().info("spawned "+ message.getJSONObject("fleet").getString("id")+ " fleet following request");
                     break;
                 case "requestPlayerFleetSnapshot":
                     packet = new JSONObject();
@@ -171,6 +187,27 @@ public class ClientScripts implements EveryFrameScript {
                     packet.put("to",message.getString("from"));
                     packet.put("fleet",FleetSerializer.serializeFleet(Global.getSector().getPlayerFleet()));
                     client.send(packet.toString());
+                    break;
+                case "requestOrbitSnapshotForLocation":
+                    LocationAPI location;
+                    if(Objects.equals(message.getString("location"), "hyperspace")){
+                        location = Global.getSector().getHyperspace();
+                    }else{
+                        location = Global.getSector().getStarSystem(message.getString("location"));
+                    }
+                    worldSync.sendOrbitSnapshotForLocation(location,client,message.getString("from"));
+                    break;
+                case "handleOrbitSnapshotForLocation":
+                    JSONObject orbits = message.getJSONObject("orbits");
+                    Iterator<?> orbitKeys = orbits.keys();
+                    while (orbitKeys.hasNext()) {
+                        String key = (String) orbitKeys.next();
+                        try {
+                            WorldSerializer.unSerializeOrbit(orbits.getJSONObject(key));
+                        } catch (Exception e) {
+                            MultiplayerLog.log().warn("Failed to apply orbit for " + key + ": " + e.getMessage());
+                        }
+                    }
                     break;
                 default:
                     MultiplayerLog.log().warn("unknown command: " + commandId);

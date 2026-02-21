@@ -17,7 +17,7 @@ import org.json.JSONObject;
 public class Server {
     private int port;
     private ServerSocket serverSocket;
-    public volatile boolean isRunning = false; // volatile pour garantir la visibilité entre threads
+    public volatile boolean isRunning = false; // volatile to ensure visibility between threads
     public final ConcurrentHashMap<String, ClientHandler> clients = new ConcurrentHashMap<>();
     private ExecutorService threadPool;
     private  ServerListener listener;
@@ -55,7 +55,7 @@ public class Server {
                 while (isRunning) {
                     try {
                         Socket socket = serverSocket.accept();
-                        if (!isRunning) break; // Sécurité si stop() est appelé pile au moment d'un accept
+                        if (!isRunning) break; // safety if stop() is called on accept
 
                         String clientId = "User-" + socket.getPort();
                         ClientHandler handler = new ClientHandler(socket, clientId, this);
@@ -92,7 +92,7 @@ public class Server {
     }
 
     private synchronized void internalStop() {
-        // Si le socket est déjà nul ou fermé, on ne fait rien
+        // do nothing because server is already stopped
         if (serverSocket == null || serverSocket.isClosed()) return;
 
         try {
@@ -109,9 +109,9 @@ public class Server {
                 listener.onServerStopped();
             }
         } catch (IOException e) {
-            // Pas besoin de log les erreurs de fermeture ici
+            // no need for logs here
         } finally {
-            serverSocket = null; // Important pour éviter le double log
+            serverSocket = null; // Important avoids double logging
         }
     }
 
@@ -175,6 +175,12 @@ public class Server {
                     authority.sendMessage(json.toString());
                     break;
                 case "handleOrbitSnapshotForLocation":
+                    clients.get(json.getString("to")).sendMessage(json.toString());
+                    break;
+                case "serverTimeRequest":
+                    authority.sendMessage(json.toString());
+                    break;
+                case "handleServerTime":
                     clients.get(json.getString("to")).sendMessage(json.toString());
                     break;
                 default:
@@ -262,7 +268,7 @@ public class Server {
                     server.processIncomingMessage(clientId, input);
                 }
             } catch (IOException e) {
-                // Erreur de lecture souvent due à une fermeture brutale
+                // read error often due to brutal connexion lost
             } finally {
                 closeConnection();
                 JSONObject packet = new JSONObject();

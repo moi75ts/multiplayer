@@ -19,6 +19,7 @@ public class UI extends JFrame {
     private JTextField ipField;
     private JTextField portField;
     private JComboBox<String> modeSelector;
+    private JLabel serverTimeLabel;
 
     private final Server server;
     private final Client client;
@@ -76,6 +77,13 @@ public class UI extends JFrame {
         configPanel.add(new JLabel("Mode: ")); configPanel.add(modeSelector);
         configPanel.add(new JLabel(" IP: ")); configPanel.add(ipField);
         configPanel.add(new JLabel(" Port: ")); configPanel.add(portField);
+        
+        // --- SERVER TIME CLOCK ---
+        serverTimeLabel = new JLabel("Server Time: c--- -- --");
+        serverTimeLabel.setForeground(Color.BLACK);
+        serverTimeLabel.setFont(new Font(serverTimeLabel.getFont().getName(), Font.BOLD, 12));
+        configPanel.add(new JLabel(" | "));
+        configPanel.add(serverTimeLabel);
 
         // --- CONSOLE ---
         logArea = new JTextArea();
@@ -242,4 +250,18 @@ public class UI extends JFrame {
     }
 
     public void showUI() { SwingUtilities.invokeLater(() -> setVisible(true)); }
+
+    /**
+     * Sets the server time clock display.
+     * Format: cYYY MM DD (e.g., c207 12 18)
+     * @param year The year (e.g., 207 for cycle 207)
+     * @param month The month (1-12)
+     * @param day The day (1-31)
+     */
+    public void setServerTime(int year, int month, int day) {
+        SwingUtilities.invokeLater(() -> {
+            String formattedTime = String.format("c%03d %02d %02d", year, month, day);
+            serverTimeLabel.setText("Server Time: " + formattedTime);
+        });
+    }
 }

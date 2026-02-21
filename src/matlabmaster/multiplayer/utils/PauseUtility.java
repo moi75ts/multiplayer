@@ -39,8 +39,11 @@ public class PauseUtility {
                         Global.getSector().getPlayerFleet().setName(fleetName);
                     }
 
-                    //update the orbits position
-                    WorldSync.requestOrbitSnapshotForLocation(Global.getSector().getPlayerFleet().getContainingLocation(),client);
+                    //catch up with the various updates
+                    if(!client.isAuthority){
+                        WorldSync.requestOrbitSnapshotForLocation(Global.getSector().getPlayerFleet().getContainingLocation(),client);
+                    }
+
 
 
                     client.send(packet.toString());

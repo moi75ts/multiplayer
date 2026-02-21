@@ -64,4 +64,8 @@ public class MultiplayerModPlugin extends BaseModPlugin {
     public static Client getClient(){
         return clientInstance;
     }
+
+    public static UI getUI(){
+        return uiInstance;
+    }
 }

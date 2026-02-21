@@ -2,6 +2,7 @@ package matlabmaster.multiplayer.client;
 
 import com.fs.starfarer.api.EveryFrameScript;
 import com.fs.starfarer.api.Global;
+import com.fs.starfarer.api.campaign.CampaignClockAPI;
 import com.fs.starfarer.api.campaign.CampaignFleetAPI;
 import com.fs.starfarer.api.campaign.LocationAPI;
 import com.fs.starfarer.campaign.Faction;
@@ -14,6 +15,7 @@ import matlabmaster.multiplayer.utils.PauseUtility;
 import matlabmaster.multiplayer.utils.WorldSerializer;
 import org.json.JSONObject;
 
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -69,7 +71,6 @@ public class ClientScripts implements EveryFrameScript {
         //handle the game pausing , disable classic in game pause
         //if the game is in a dialog inform the server
         PauseUtility.clientPauseUtility(client,fleetSync);
-
         // --- 1. process received message every frame ---
         // they are processed every frame to limit lag
         while (!messageQueue.isEmpty()) {
@@ -209,12 +210,21 @@ public class ClientScripts implements EveryFrameScript {
                         }
                     }
                     break;
+                case "serverTimeRequest":
+                    packet = new JSONObject();
+                    packet.put("commandId","handleServerTime");
+                    packet.put("to",message.getString("from"));
+                    packet.put("timestamp",client.multiplayerTimestamp);
+                    break;
+                case "handleServerTime":
+                    client.multiplayerTimestamp = message.getLong("timestamp");
+                    break;
                 default:
                     MultiplayerLog.log().warn("unknown command: " + commandId);
                     break;
             }
         } catch (Exception e) {
-            MultiplayerLog.log().error("Exception in processMessage: " + e.getMessage() + " " + message.toString(), e);
+            MultiplayerLog.log().error("Exception in processMessage: " + e.getMessage() + " " + Arrays.toString(e.getStackTrace()) + " " + message.toString(), e);
         }
     }
 
@@ -224,8 +234,27 @@ public class ClientScripts implements EveryFrameScript {
             if(client.isAuthority){
                 fleetSync.sendGlobalFleetsUpdate(client);
             }
+            // Update server time clock from game clock
+            //updateServerTimeFromGameClock();
         } catch (Exception e) {
             MultiplayerLog.log().error("Unable to send own fleet update: " + e.getMessage(), e);
         }
     }
+
+    //private void updateServerTimeFromGameClock() {
+    //    try {
+    //        if (Global.getSector() != null && Global.getSector().getClock() != null && client.multiplayerTimestamp != null) {
+    //            if(client.multiplayerClock == null){
+    //                client.multiplayerClock = Global.getSector().getClock().createClock(client.multiplayerTimestamp);
+    //            }
+    //            int cycle = client.multiplayerClock.getCycle();
+    //            int month = client.multiplayerClock.getMonth();
+    //            int day = client.multiplayerClock.getDay();
+    //
+    //            matlabmaster.multiplayer.MultiplayerModPlugin.getUI().setServerTime(cycle, month, day);
+    //        }
+    //    } catch (Exception e) {
+    //        // Silently fail if sector/clock not available yet
+    //    }
+    //}
 }
